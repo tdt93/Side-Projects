@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Airtable viewer</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header__top">
+          <h1 class="title">Airtable records</h1>
+          <p class="subtitle" id="subtitle">Loading…</p>
+        </div>
+        <div class="toolbar" id="toolbar" hidden>
+          <label class="field">
+            <span class="field__label">Search</span>
+            <input
+              type="search"
+              id="filter"
+              class="input"
+              placeholder="Filter across all fields…"
+              autocomplete="off"
+            />
+          </label>
+          <label class="field">
+            <span class="field__label">Sort by</span>
+            <select id="sortField" class="select"></select>
+          </label>
+          <label class="field">
+            <span class="field__label">Order</span>
+            <select id="sortDir" class="select">
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </label>
+          <div class="field field--inline">
+            <span class="field__label">Layout</span>
+            <div class="segmented" role="group" aria-label="Layout">
+              <button type="button" class="segmented__btn is-active" data-layout="grid" aria-pressed="true">
+                Grid
+              </button>
+              <button type="button" class="segmented__btn" data-layout="list" aria-pressed="false">
+                List
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="main">
+        <div id="error" class="error" hidden></div>
+        <div id="empty" class="empty" hidden>No records match your filter.</div>
+        <div id="grid" class="grid" hidden></div>
+        <table id="table" class="table" hidden>
+          <thead>
+            <tr id="theadRow"></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
