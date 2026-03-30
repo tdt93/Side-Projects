@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import path from "path";
 import session from "express-session";
@@ -9,21 +9,108 @@ import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
 import { getUserByEmail } from "./db.js";
 
+function formatCellValueForPartner(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => {
+        if (v && typeof v === "object" && "url" in v) return v.url;
+        return typeof v === "object" ? JSON.stringify(v) : String(v);
+      })
+      .join(", ");
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function partnerValueFromRecord(record, fieldName) {
+  if (!fieldName || !record?.fields) return "";
+  const raw = record.fields[fieldName];
+  if (raw === null || raw === undefined) return "";
+  if (typeof raw === "string") return raw;
+  return formatCellValueForPartner(raw);
+}
+
+function normalizePartnerCompare(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load env: ./airtable-viewer/.env first, then optional repo-root ../.env for missing keys only.
+dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.set("trust proxy", 1);
 
+function stripEnvQuotes(value) {
+  const s = String(value ?? "").trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+
 const PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = process.env.AIRTABLE_BASE_ID;
-const TABLE = process.env.AIRTABLE_TABLE_NAME;
+const TABLE = stripEnvQuotes(process.env.AIRTABLE_TABLE_NAME);
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK =
   process.env.GOOGLE_CALLBACK_URL || `http://localhost:${PORT}/api/auth/google/callback`;
+
+// =============================================================================
+// LIST VIEW & GROUPING — edit in .env only (no UI for these)
+// -----------------------------------------------------------------------------
+// AIRTABLE_PARTNER_GROUP_FIELD
+//   Airtable field name whose value must match the per-user partner_filter in SQLite (see add-user script).
+//   Rows with empty value or "BRAK" are excluded. Each user only sees rows for their assigned partner.
+//
+// AIRTABLE_LIST_VIEW_FIELDS
+//   Comma-separated Airtable field NAMES exactly as in the base.
+//   Order must match these fixed UI keys (for translations):
+//     1 fullname  2 dob  3 passportNr  4 case  5 documentSubmittedDate
+//     6 fingerprintDate  7 decisionExpectedDate  8 collectionCardDate
+//   Example:
+//     AIRTABLE_LIST_VIEW_FIELDS=Fullname,Date of birth,Passport nr.,Fingerprint-date,...
+// =============================================================================
+
+const LIST_VIEW_KEYS = [
+  "fullname",
+  "dob",
+  "passportNr",
+  "case",
+  "documentSubmittedDate",
+  "fingerprintDate",
+  "decisionExpectedDate",
+  "collectionCardDate",
+];
+
+function parseListViewColumns() {
+  const raw = stripEnvQuotes(process.env.AIRTABLE_LIST_VIEW_FIELDS || "");
+  const names = raw
+    .split(",")
+    .map((s) => stripEnvQuotes(s))
+    .filter(Boolean);
+  const cols = [];
+  for (let i = 0; i < names.length && i < LIST_VIEW_KEYS.length; i++) {
+    cols.push({ key: LIST_VIEW_KEYS[i], airtableField: names[i] });
+  }
+  return cols;
+}
+
+const PARTNER_GROUP_FIELD =
+  process.env.AIRTABLE_PARTNER_GROUP_FIELD?.trim() || "PARTNER (from Klienty)";
 
 function requireEnv() {
   const missing = [];
@@ -150,6 +237,8 @@ app.get("/api/config", (_req, res) => {
   res.json({
     googleAuth: googleEnabled(),
     airtableConfigured: airtableMissing.length === 0,
+    partnerGroupField: PARTNER_GROUP_FIELD,
+    listViewColumns: parseListViewColumns(),
   });
 });
 
@@ -196,7 +285,7 @@ if (googleEnabled()) {
   );
 }
 
-app.get("/api/records", requireAuth, async (_req, res) => {
+app.get("/api/records", requireAuth, async (req, res) => {
   const missing = requireEnv();
   if (missing.length) {
     return res.status(503).json({
@@ -206,8 +295,32 @@ app.get("/api/records", requireAuth, async (_req, res) => {
   }
 
   try {
-    const records = await fetchAllRecords();
-    res.json({ records });
+    const row = getUserByEmail(req.user?.email);
+    const expected = row?.partner_filter?.trim();
+
+    if (!expected) {
+      return res.json({
+        records: [],
+        listViewColumns: parseListViewColumns(),
+        partnerGroupField: PARTNER_GROUP_FIELD,
+        noPartnerFilter: true,
+      });
+    }
+
+    const expectedN = normalizePartnerCompare(expected);
+    const all = await fetchAllRecords();
+    const records = all.filter((r) => {
+      const v = partnerValueFromRecord(r, PARTNER_GROUP_FIELD).trim();
+      if (!v) return false;
+      if (v.toUpperCase() === "BRAK") return false;
+      return normalizePartnerCompare(v) === expectedN;
+    });
+
+    res.json({
+      records,
+      listViewColumns: parseListViewColumns(),
+      partnerGroupField: PARTNER_GROUP_FIELD,
+    });
   } catch (e) {
     const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
     res.status(status).json({

@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "user:add": "node scripts/add-user.mjs"
+    "user:add": "node scripts/add-user.mjs",
+    "user:partner": "node scripts/set-user-partner.mjs",
+    "user:seed-test": "node scripts/add-user.mjs test@example.com Test@123 ReplaceWithAirtablePartnerValue"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
