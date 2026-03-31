@@ -60,6 +60,14 @@ function stripEnvQuotes(value) {
   return s;
 }
 
+/** Production: https://partner.a2dsolutions.pl (no trailing slash). If unset, OAuth callback uses http://localhost:PORT. */
+const PUBLIC_APP_BASE = stripEnvQuotes(process.env.PUBLIC_APP_URL || "").replace(/\/+$/, "");
+
+function publicOrigin() {
+  if (PUBLIC_APP_BASE) return PUBLIC_APP_BASE;
+  return `http://localhost:${PORT}`;
+}
+
 const PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = process.env.AIRTABLE_BASE_ID;
 const TABLE = stripEnvQuotes(process.env.AIRTABLE_TABLE_NAME);
@@ -67,7 +75,8 @@ const SESSION_SECRET = process.env.SESSION_SECRET;
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const GOOGLE_CALLBACK =
-  process.env.GOOGLE_CALLBACK_URL || `http://localhost:${PORT}/api/auth/google/callback`;
+  stripEnvQuotes(process.env.GOOGLE_CALLBACK_URL || "") ||
+  `${publicOrigin()}/api/auth/google/callback`;
 
 // =============================================================================
 // LIST VIEW & GROUPING — edit in .env only (no UI for these)
@@ -480,7 +489,7 @@ app.get("/api/clients", requireAuth, async (req, res) => {
 app.use(express.static(path.join(__dirname, "public")));
 
 app.listen(PORT, () => {
-  console.log(`Open http://localhost:${PORT}`);
+  console.log(`Listening on port ${PORT} — public URL: ${publicOrigin()}`);
   if (requireEnv().length) {
     console.warn("Set AIRTABLE_PAT, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME in .env");
   }
