@@ -27,6 +27,9 @@ const filterEl = document.getElementById("filter");
 const sortFieldEl = document.getElementById("sortField");
 const sortDirEl = document.getElementById("sortDir");
 
+const viewModeCases = document.getElementById("viewModeCases");
+const viewModeClients = document.getElementById("viewModeClients");
+
 const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
 const pageInfo = document.getElementById("pageInfo");
@@ -41,11 +44,19 @@ const tbody = document.getElementById("tbody");
 
 const fetchOpts = { credentials: "same-origin" };
 
+/** Browser tab title (fixed branding). */
+const APP_DOC_TITLE = "A2D - Partner Relations";
+
 let rawRecords = [];
-let fieldNames = [];
 
 /** @type {{ key: string, airtableField: string }[]} */
 let listColumns = [];
+
+/** @type {"cases" | "clients"} */
+let listViewMode = "cases";
+
+const CASE_SORT_KEYS = ["documentSubmittedDate", "fingerprintDate", "decisionExpectedDate", "collectionCardDate"];
+const CLIENT_SORT_KEYS = ["fullname", "dob", "passportNr", "cardExpiredDate"];
 
 let page = 1;
 let pageSize = Number(pageSizeSelect?.value || 20);
@@ -80,7 +91,7 @@ const i18n = {
     errorLoading: "Failed to load records.",
     configMissing: "Configure the server: set {vars} in .env and restart.",
     listFieldsMissing:
-      "Set AIRTABLE_LIST_VIEW_FIELDS in .env (comma-separated Airtable field names). See server.js for the expected order.",
+      "Set VIEW_FIELDS",
     googleDenied: "Google sign-in is only available for emails your administrator has added.",
     googleSignInLabel: "Sign in with Google",
     pageInfoShort: "page: {page}/{pages}",
@@ -91,12 +102,14 @@ const i18n = {
       "Use the password your administrator set. Google sign-in is optional and only works if it is enabled and your email was added to the system.",
     footerPrivacy: "Privacy policy",
     footerSupport: "Support",
+    footerCopyright: "Copyright A2D SOLUTIONS © {year}",
+    listViewAria: "Choose which list to show",
     documentTitleGuest: "Welcome — A2D Solutions",
     documentTitleRecords: "Records — A2D Solutions",
     notConfiguredSubtitle: "Not configured",
     errorSubtitle: "Error",
     noPartnerFilter:
-      "Your account has no partner assigned. Ask your administrator to set partner_filter in the database (see .env.example).",
+      "Your account has no partner assigned. Ask your administrator to set partner",
     loginEmailRequired: "Enter your email.",
     loginPasswordRequired: "Enter your password or use Google.",
     loginFailed: "Sign-in failed.",
@@ -108,6 +121,14 @@ const i18n = {
     col_documentSubmittedDate: "Document submitted date",
     col_decisionExpectedDate: "Decision expected date",
     col_collectionCardDate: "Collection card date",
+    col_cardExpiredDate: "Card expiry date",
+    listViewSection: "List",
+    viewActiveCases: "Active cases",
+    viewClientList: "Client list",
+    documentTitleClients: "Clients — A2D Solutions",
+    listClientFieldsMissing:
+      "Set LIST_FIELDS",
+    errorLoadingClients: "Failed to load client list.",
   },
   vi: {
     languageName: "Tiếng Việt",
@@ -134,7 +155,7 @@ const i18n = {
     errorLoading: "Không thể tải dữ liệu.",
     configMissing: "Cấu hình server: đặt {vars} trong .env và khởi động lại.",
     listFieldsMissing:
-      "Đặt AIRTABLE_LIST_VIEW_FIELDS trong .env (tên cột Airtable, cách nhau bởi dấu phẩy). Xem server.js để biết thứ tự cột.",
+      "Đặt VIEW_FIELDS",
     googleDenied: "Đăng nhập Google chỉ hoạt động với các email đã được quản trị viên thêm.",
     googleSignInLabel: "Đăng nhập với Google",
     pageInfoShort: "trang: {page}/{pages}",
@@ -150,7 +171,7 @@ const i18n = {
     notConfiguredSubtitle: "Chưa cấu hình",
     errorSubtitle: "Lỗi",
     noPartnerFilter:
-      "Tài khoản của bạn chưa được gán đối tác. Nhờ quản trị viên đặt partner_filter trong cơ sở dữ liệu (xem .env.example).",
+      "Tài khoản của bạn chưa được gán đối tác. Nhờ quản trị viên đặt partner",
     loginEmailRequired: "Nhập email của bạn.",
     loginPasswordRequired: "Nhập mật khẩu hoặc dùng Google.",
     loginFailed: "Đăng nhập thất bại.",
@@ -161,7 +182,17 @@ const i18n = {
     col_fingerprintDate: "Ngày lấy vân tay",
     col_documentSubmittedDate: "Ngày nộp hồ sơ",
     col_decisionExpectedDate: "Ngày dự kiến có quyết định",
-    col_collectionCardDate: "Ngày nhận thẻ thu thập",
+    col_collectionCardDate: "Ngày nhận thẻ",
+    col_cardExpiredDate: "Ngày hết hạn thẻ",
+    listViewSection: "Danh sách",
+    listViewAria: "Chọn danh sách hiển thị",
+    viewActiveCases: "Hồ sơ đang xử lý",
+    viewClientList: "Danh sách khách hàng",
+    documentTitleClients: "Khách hàng — A2D Solutions",
+    listClientFieldsMissing:
+      "Đặt LIST_FIELDS",
+    errorLoadingClients: "Không tải được danh sách khách hàng.",
+    footerCopyright: "Bản quyền A2D SOLUTIONS © {year}",
   },
   pl: {
     languageName: "Polski",
@@ -188,7 +219,7 @@ const i18n = {
     errorLoading: "Nie udało się wczytać danych.",
     configMissing: "Skonfiguruj serwer: ustaw {vars} w .env i uruchom ponownie.",
     listFieldsMissing:
-      "Ustaw AIRTABLE_LIST_VIEW_FIELDS w .env (nazwy pól Airtable, rozdzielone przecinkami). Kolejność — patrz server.js.",
+      "Ustaw VIEW_FIELDS",
     googleDenied: "Logowanie Google działa tylko dla adresów dodanych przez administratora.",
     googleSignInLabel: "Zaloguj się przez Google",
     pageInfoShort: "strona: {page}/{pages}",
@@ -199,12 +230,14 @@ const i18n = {
       "Użyj hasła ustawionego przez administratora. Logowanie Google jest opcjonalne i działa tylko wtedy, gdy jest włączone oraz Twój adres e-mail został dodany do systemu.",
     footerPrivacy: "Polityka prywatności",
     footerSupport: "Wsparcie",
+    footerCopyright: "Copyright A2D SOLUTIONS © {year}",
+    listViewAria: "Wybierz widok listy",
     documentTitleGuest: "Witamy — A2D Solutions",
     documentTitleRecords: "Rekordy — A2D Solutions",
     notConfiguredSubtitle: "Brak konfiguracji",
     errorSubtitle: "Błąd",
     noPartnerFilter:
-      "Na koncie nie przypisano partnera. Poproś administratora o ustawienie partner_filter w bazie (patrz .env.example).",
+      "Na koncie nie przypisano partnera. Poproś administratora o ustawienie partner",
     loginEmailRequired: "Podaj adres e-mail.",
     loginPasswordRequired: "Podaj hasło lub użyj Google.",
     loginFailed: "Logowanie nie powiodło się.",
@@ -216,6 +249,14 @@ const i18n = {
     col_documentSubmittedDate: "Data złożenia dokumentów",
     col_decisionExpectedDate: "Oczekiwana data decyzji",
     col_collectionCardDate: "Data odbioru karty",
+    col_cardExpiredDate: "Data wygaśnięcia karty",
+    listViewSection: "Lista",
+    viewActiveCases: "Aktywne sprawy",
+    viewClientList: "Lista klientów",
+    documentTitleClients: "Klienci — A2D Solutions",
+    listClientFieldsMissing:
+      "Ustaw LIST_FIELDS",
+    errorLoadingClients: "Nie udało się wczytać listy klientów.",
   },
 };
 
@@ -247,14 +288,6 @@ function formatCellValue(value) {
   }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
-}
-
-function collectFieldNames(records) {
-  const set = new Set();
-  for (const r of records) {
-    if (r.fields && typeof r.fields === "object") Object.keys(r.fields).forEach((k) => set.add(k));
-  }
-  return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
 function recordMatchesFilter(record, query) {
@@ -303,6 +336,35 @@ function columnHeader(key) {
   return t(k);
 }
 
+function populateSortFieldOptions() {
+  if (!sortFieldEl) return;
+  const keys = listViewMode === "cases" ? CASE_SORT_KEYS : CLIENT_SORT_KEYS;
+  const map = new Map(listColumns.map((c) => [c.key, c.airtableField]));
+
+  sortFieldEl.replaceChildren();
+  for (const key of keys) {
+    const field = map.get(key);
+    if (!field) continue;
+    const opt = document.createElement("option");
+    opt.value = field;
+    opt.textContent = columnHeader(key);
+    sortFieldEl.appendChild(opt);
+  }
+  if (!sortFieldEl.options.length) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "—";
+    sortFieldEl.appendChild(opt);
+  }
+  const allowed = [...sortFieldEl.options].map((o) => o.value).filter(Boolean);
+  if (allowed.includes(sortField)) {
+    sortFieldEl.value = sortField;
+  } else {
+    sortField = allowed[0] || "";
+    sortFieldEl.value = sortField;
+  }
+}
+
 function renderTable(pageRecords) {
   const cols = listColumns;
 
@@ -310,12 +372,12 @@ function renderTable(pageRecords) {
     .map((c) => `<th scope="col">${escapeHtml(columnHeader(c.key))}</th>`)
     .join("");
 
-  const rows = pageRecords.map((r) => {
+  const rows = pageRecords.map((r, i) => {
     const cells = cols.map((c) => {
       const val = formatCellValue(r.fields?.[c.airtableField]);
       return `<td><span class="cell-value">${escapeHtml(val)}</span></td>`;
     });
-    return `<tr>${cells.join("")}</tr>`;
+    return `<tr class="table__row" data-row="${i}">${cells.join("")}</tr>`;
   });
 
   tbody.innerHTML = rows.join("");
@@ -409,8 +471,9 @@ function setGuestUI() {
   subtitle.textContent = t("guestSubtitle");
   refreshDocumentTitle();
 
+  listViewMode = "cases";
+  updateViewModeButtons();
   rawRecords = [];
-  fieldNames = [];
   listColumns = [];
   tbody.innerHTML = "";
   theadRow.innerHTML = "";
@@ -429,12 +492,35 @@ function setLoggedInUI(email) {
   accountActionText.textContent = email;
   accountActionBtn.classList.remove("pill--accent");
   accountActionBtn.classList.add("pill--user");
+  updateViewModeButtons();
   refreshDocumentTitle();
 }
 
 function refreshDocumentTitle() {
-  const authed = accountActionBtn?.classList.contains("pill--user");
-  document.title = authed ? t("documentTitleRecords") : t("documentTitleGuest");
+  document.title = APP_DOC_TITLE;
+}
+
+function updateWorkspaceFooter() {
+  const el = document.getElementById("workspaceFooterCopy");
+  if (!el) return;
+  el.textContent = t("footerCopyright").replace("{year}", String(new Date().getFullYear()));
+}
+
+function updateViewModeButtons() {
+  viewModeCases?.classList.toggle("is-active", listViewMode === "cases");
+  viewModeClients?.classList.toggle("is-active", listViewMode === "clients");
+}
+
+function setListViewMode(mode) {
+  if (mode !== "cases" && mode !== "clients") return;
+  if (listViewMode === mode) return;
+  listViewMode = mode;
+  updateViewModeButtons();
+  page = 1;
+  refreshDocumentTitle();
+  if (!accountActionBtn?.classList.contains("pill--user")) return;
+  if (mode === "cases") loadRecords();
+  else loadClients();
 }
 
 function refreshHtmlLang() {
@@ -465,6 +551,11 @@ function applyI18n() {
     el.textContent = t(key);
   });
 
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    const key = el.dataset.i18nAria;
+    if (key) el.setAttribute("aria-label", t(key));
+  });
+
   filterEl.placeholder = t("searchPlaceholder");
   sortDirEl.querySelector('option[value="asc"]').textContent = t("ascending");
   sortDirEl.querySelector('option[value="desc"]').textContent = t("descending");
@@ -473,9 +564,11 @@ function applyI18n() {
   if (accountActionBtn?.classList.contains("pill--user")) {
     enforceAuthPanels(true);
     if (subtitle.getAttribute("aria-busy") !== "true") subtitle.hidden = true;
+    if (listColumns.length) populateSortFieldOptions();
     if (listColumns.length && !recordsView.hidden) render();
   }
 
+  updateWorkspaceFooter();
   refreshHtmlLang();
   refreshDocumentTitle();
 }
@@ -498,6 +591,20 @@ function showGoogleUI(enabled) {
 
 function applyServerConfig(cfg) {
   listColumns = Array.isArray(cfg?.listViewColumns) ? cfg.listViewColumns : [];
+  syncClientListTab(cfg);
+}
+
+function syncClientListTab(cfg) {
+  const show = Boolean(cfg?.clientListConfigured);
+  if (viewModeClients) viewModeClients.hidden = !show;
+  if (!show && listViewMode === "clients") {
+    listViewMode = "cases";
+    updateViewModeButtons();
+    refreshDocumentTitle();
+    if (accountActionBtn?.classList.contains("pill--user") && !recordsView.hidden) {
+      loadRecords();
+    }
+  }
 }
 
 async function loadRecords() {
@@ -538,6 +645,11 @@ async function loadRecords() {
     return;
   }
 
+  if (listViewMode !== "cases") {
+    setSubtitleLoading(false);
+    return;
+  }
+
   // Authoritative field layout from server (same process that reads .env — avoids stale / empty client config).
   if (Array.isArray(data.listViewColumns) && data.listViewColumns.length) {
     listColumns = data.listViewColumns;
@@ -547,7 +659,6 @@ async function loadRecords() {
     errorEl.hidden = false;
     errorEl.textContent = t("noPartnerFilter");
     rawRecords = [];
-    fieldNames = [];
     tbody.innerHTML = "";
     theadRow.innerHTML = "";
     tableWrap.hidden = true;
@@ -560,7 +671,6 @@ async function loadRecords() {
     errorEl.hidden = false;
     errorEl.textContent = t("listFieldsMissing");
     rawRecords = [];
-    fieldNames = [];
     tbody.innerHTML = "";
     theadRow.innerHTML = "";
     tableWrap.hidden = true;
@@ -570,25 +680,83 @@ async function loadRecords() {
   }
 
   rawRecords = data.records || [];
-  fieldNames = collectFieldNames(rawRecords);
 
-  sortFieldEl.replaceChildren();
-  for (const f of fieldNames) {
-    const opt = document.createElement("option");
-    opt.value = f;
-    opt.textContent = f;
-    sortFieldEl.appendChild(opt);
+  populateSortFieldOptions();
+
+  page = 1;
+  render();
+  setSubtitleLoading(false);
+  if (pager) pager.hidden = false;
+}
+
+async function loadClients() {
+  errorEl.hidden = true;
+  emptyEl.hidden = true;
+  setSubtitleLoading(true);
+
+  const health = await fetch("/api/health", fetchOpts).then((r) => r.json());
+  if (!health.ok) {
+    errorEl.hidden = false;
+    errorEl.textContent = t("configMissing").replace("{vars}", health.missingEnv.join(", "));
+    setSubtitleLoading(false);
+    subtitle.hidden = false;
+    subtitle.textContent = t("notConfiguredSubtitle");
+    return;
   }
-  if (!fieldNames.length) {
-    const opt = document.createElement("option");
-    opt.value = "";
-    opt.textContent = "(no fields)";
-    sortFieldEl.appendChild(opt);
+
+  const res = await fetch("/api/clients", fetchOpts);
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    setSubtitleLoading(false);
+    setGuestUI();
+    return;
   }
 
-  sortField = fieldNames.includes(sortField) ? sortField : fieldNames[0] || "";
-  sortFieldEl.value = sortField;
+  if (!res.ok) {
+    errorEl.hidden = false;
+    errorEl.textContent = data.detail || data.error || t("errorLoadingClients");
+    setSubtitleLoading(false);
+    subtitle.hidden = false;
+    subtitle.textContent = t("errorSubtitle");
+    return;
+  }
 
+  if (listViewMode !== "clients") {
+    setSubtitleLoading(false);
+    return;
+  }
+
+  if (Array.isArray(data.clientListColumns) && data.clientListColumns.length) {
+    listColumns = data.clientListColumns;
+  }
+
+  if (data.noPartnerFilter) {
+    errorEl.hidden = false;
+    errorEl.textContent = t("noPartnerFilter");
+    rawRecords = [];
+    tbody.innerHTML = "";
+    theadRow.innerHTML = "";
+    tableWrap.hidden = true;
+    if (pager) pager.hidden = true;
+    setSubtitleLoading(false);
+    return;
+  }
+
+  if (!listColumns.length) {
+    errorEl.hidden = false;
+    errorEl.textContent = t("listClientFieldsMissing");
+    rawRecords = [];
+    tbody.innerHTML = "";
+    theadRow.innerHTML = "";
+    tableWrap.hidden = true;
+    if (pager) pager.hidden = true;
+    setSubtitleLoading(false);
+    return;
+  }
+
+  rawRecords = data.records || [];
+  populateSortFieldOptions();
   page = 1;
   render();
   setSubtitleLoading(false);
@@ -624,6 +792,9 @@ function setSidebarOpen(open) {
 
 menuToggle?.addEventListener("click", () => setSidebarOpen(!shell.classList.contains("is-sidebar-open")));
 sidebarBackdrop?.addEventListener("click", () => setSidebarOpen(false));
+
+viewModeCases?.addEventListener("click", () => setListViewMode("cases"));
+viewModeClients?.addEventListener("click", () => setListViewMode("clients"));
 
 accountActionBtn?.addEventListener("click", async () => {
   const isSignedIn = accountActionBtn.classList.contains("pill--user");
@@ -728,9 +899,6 @@ loginForm?.addEventListener("submit", async (e) => {
   await loadRecords();
   setSidebarOpen(false);
 });
-
-document.getElementById("linkPrivacy")?.addEventListener("click", (e) => e.preventDefault());
-document.getElementById("linkSupport")?.addEventListener("click", (e) => e.preventDefault());
 
 currentLang = localStorage.getItem("lang") || "vi";
 applyI18n();

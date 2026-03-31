@@ -69,3 +69,21 @@ export function userCount() {
   const row = db.prepare("SELECT COUNT(*) AS n FROM users").get();
   return row?.n ?? 0;
 }
+
+/** @returns {{ id: number, email: string, partner_filter: string | null, created_at: string, has_password: boolean }[]} */
+export function listUsers() {
+  const rows = db
+    .prepare(
+      `SELECT id, email, partner_filter, created_at,
+        CASE WHEN password_hash IS NOT NULL AND length(trim(password_hash)) > 0 THEN 1 ELSE 0 END AS hp
+      FROM users ORDER BY lower(email)`
+    )
+    .all();
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    partner_filter: r.partner_filter,
+    created_at: r.created_at,
+    has_password: Boolean(r.hp),
+  }));
+}

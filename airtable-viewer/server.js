@@ -7,7 +7,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
-import { getUserByEmail } from "./db.js";
+import { getUserByEmail, listUsers, updateUserPartnerFilter } from "./db.js";
 
 function formatCellValueForPartner(value) {
   if (value === null || value === undefined) return "";
@@ -109,8 +109,38 @@ function parseListViewColumns() {
   return cols;
 }
 
+// "Klienty" table — client list view (name, DOB, passport, card expiry). Field names from .env.
+const CLIENT_LIST_KEYS = ["fullname", "dob", "passportNr", "cardExpiredDate"];
+
+function parseClientListColumns() {
+  const raw = stripEnvQuotes(process.env.AIRTABLE_CLIENT_LIST_FIELDS || "");
+  const names = raw
+    .split(",")
+    .map((s) => stripEnvQuotes(s))
+    .filter(Boolean);
+  const cols = [];
+  for (let i = 0; i < names.length && i < CLIENT_LIST_KEYS.length; i++) {
+    cols.push({ key: CLIENT_LIST_KEYS[i], airtableField: names[i] });
+  }
+  return cols;
+}
+
 const PARTNER_GROUP_FIELD =
   process.env.AIRTABLE_PARTNER_GROUP_FIELD?.trim() || "PARTNER (from Klienty)";
+
+/** Field on table Klienty that stores partner (often "PARTNER" — not the linked label on Sprawy). */
+const CLIENTS_PARTNER_FIELD =
+  process.env.AIRTABLE_CLIENTS_PARTNER_FIELD?.trim() || "PARTNER";
+
+const CLIENTS_TABLE = stripEnvQuotes(process.env.AIRTABLE_CLIENTS_TABLE || "Klienty");
+
+const CACHE_TTL_MS = Math.max(15_000, (Number(process.env.AIRTABLE_CACHE_TTL_SEC) || 120) * 1000);
+
+/** If set, GET /api/admin/users with header X-Admin-Secret lists SQLite users (see /admin-users.html). */
+const ADMIN_USER_LIST_SECRET = stripEnvQuotes(process.env.ADMIN_USER_LIST_SECRET || "");
+
+/** @type {Map<string, { records: unknown[], ts: number }>} */
+const tableCache = new Map();
 
 function requireEnv() {
   const missing = [];
@@ -198,8 +228,8 @@ function requireAuth(req, res, next) {
   next();
 }
 
-async function fetchAllRecords() {
-  const urlBase = `https://api.airtable.com/v0/${encodeURIComponent(BASE_ID)}/${encodeURIComponent(TABLE)}`;
+async function fetchAllRecordsFromTable(tableName) {
+  const urlBase = `https://api.airtable.com/v0/${encodeURIComponent(BASE_ID)}/${encodeURIComponent(tableName)}`;
   const headers = {
     Authorization: `Bearer ${PAT}`,
     "Content-Type": "application/json",
@@ -228,17 +258,34 @@ async function fetchAllRecords() {
   return all;
 }
 
+async function getCachedTableRecords(tableName) {
+  const cacheKey = `${BASE_ID}::${tableName}`;
+  const now = Date.now();
+  const hit = tableCache.get(cacheKey);
+  if (hit && now - hit.ts < CACHE_TTL_MS) {
+    return hit.records;
+  }
+  const records = await fetchAllRecordsFromTable(tableName);
+  tableCache.set(cacheKey, { records, ts: now });
+  return records;
+}
+
 function googleEnabled() {
   return Boolean(GOOGLE_ID && GOOGLE_SECRET);
 }
 
 app.get("/api/config", (_req, res) => {
   const airtableMissing = requireEnv();
+  const clientCols = parseClientListColumns();
   res.json({
     googleAuth: googleEnabled(),
     airtableConfigured: airtableMissing.length === 0,
     partnerGroupField: PARTNER_GROUP_FIELD,
     listViewColumns: parseListViewColumns(),
+    clientListColumns: clientCols,
+    clientsTable: CLIENTS_TABLE,
+    clientListConfigured: airtableMissing.length === 0 && clientCols.length === CLIENT_LIST_KEYS.length,
+    cacheTtlSec: Math.round(CACHE_TTL_MS / 1000),
   });
 });
 
@@ -253,6 +300,57 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/me", (req, res) => {
   if (!req.user) return res.status(401).json({ user: null });
   res.json({ user: req.user });
+});
+
+app.get("/api/admin/users", (req, res) => {
+  if (!ADMIN_USER_LIST_SECRET) {
+    return res.status(503).json({
+      error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
+    });
+  }
+  const sent = String(req.get("x-admin-secret") || "").trim();
+  if (sent !== ADMIN_USER_LIST_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  try {
+    res.json({ users: listUsers() });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Failed to list users" });
+  }
+});
+
+app.patch("/api/admin/users", (req, res) => {
+  if (!ADMIN_USER_LIST_SECRET) {
+    return res.status(503).json({
+      error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
+    });
+  }
+  const sent = String(req.get("x-admin-secret") || "").trim();
+  if (sent !== ADMIN_USER_LIST_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!email) {
+    return res.status(400).json({ error: "email is required" });
+  }
+  if (!Object.prototype.hasOwnProperty.call(req.body || {}, "partner_filter")) {
+    return res.status(400).json({ error: "partner_filter is required (use empty string to clear)" });
+  }
+  const raw = req.body.partner_filter;
+  const partner =
+    raw === null || raw === undefined || String(raw).trim() === ""
+      ? null
+      : String(raw).trim();
+  try {
+    updateUserPartnerFilter(email, partner);
+    const row = getUserByEmail(email);
+    res.json({
+      ok: true,
+      user: { email: row.email, partner_filter: row.partner_filter },
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message || "Update failed" });
+  }
 });
 
 app.post("/api/login", (req, res, next) => {
@@ -308,7 +406,7 @@ app.get("/api/records", requireAuth, async (req, res) => {
     }
 
     const expectedN = normalizePartnerCompare(expected);
-    const all = await fetchAllRecords();
+    const all = await getCachedTableRecords(TABLE);
     const records = all.filter((r) => {
       const v = partnerValueFromRecord(r, PARTNER_GROUP_FIELD).trim();
       if (!v) return false;
@@ -325,6 +423,56 @@ app.get("/api/records", requireAuth, async (req, res) => {
     const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
     res.status(status).json({
       error: e.message || "Failed to load records",
+    });
+  }
+});
+
+app.get("/api/clients", requireAuth, async (req, res) => {
+  const missing = requireEnv();
+  if (missing.length) {
+    return res.status(503).json({
+      error: "Missing environment variables",
+      missing,
+    });
+  }
+
+  const listCols = parseClientListColumns();
+  if (listCols.length !== CLIENT_LIST_KEYS.length) {
+    return res.status(503).json({
+      error: "Client list not configured",
+      detail: "Set AIRTABLE_CLIENT_LIST_FIELDS to four Airtable field names: fullname, dob, passportNr, cardExpiredDate order.",
+    });
+  }
+
+  try {
+    const row = getUserByEmail(req.user?.email);
+    const expected = row?.partner_filter?.trim();
+
+    if (!expected) {
+      return res.json({
+        records: [],
+        clientListColumns: listCols,
+        noPartnerFilter: true,
+      });
+    }
+
+    const expectedN = normalizePartnerCompare(expected);
+    const all = await getCachedTableRecords(CLIENTS_TABLE);
+    const records = all.filter((r) => {
+      const v = partnerValueFromRecord(r, CLIENTS_PARTNER_FIELD).trim();
+      if (!v) return false;
+      if (v.toUpperCase() === "BRAK") return false;
+      return normalizePartnerCompare(v) === expectedN;
+    });
+
+    res.json({
+      records,
+      clientListColumns: listCols,
+    });
+  } catch (e) {
+    const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
+    res.status(status).json({
+      error: e.message || "Failed to load clients",
     });
   }
 });

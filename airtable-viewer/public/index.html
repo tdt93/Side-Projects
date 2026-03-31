@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Records — A2D Solutions</title>
+    <title>A2D - Partner Relation</title>
+    <link rel="icon" href="/favicon.png" type="image/png" />
     <link rel="stylesheet" href="/styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -50,6 +51,16 @@
           </div>
 
           <div class="sidebar__controls" id="sidebarControls" hidden>
+            <p class="sidebar__section-label" data-i18n="listViewSection">List</p>
+            <div class="segmented segmented--wide" id="viewModeSeg" role="group" aria-label="List view" data-i18n-aria="listViewAria">
+              <button type="button" class="segmented__btn is-active" data-view="cases" id="viewModeCases">
+                <span data-i18n="viewActiveCases">Active cases</span>
+              </button>
+              <button type="button" class="segmented__btn" data-view="clients" id="viewModeClients">
+                <span data-i18n="viewClientList">Client list</span>
+              </button>
+            </div>
+
             <p class="sidebar__section-label" data-i18n="findSortLabel">Find &amp; sort</p>
             <label class="field">
               <span class="field__label" data-i18n="searchLabel">Search</span>
@@ -76,7 +87,13 @@
         </div>
 
         <footer class="sidebar__footer">
-          <a class="footer-link" href="#" id="linkPrivacy">
+          <a
+            class="footer-link"
+            href="https://a2dsolutions.pl/pl/polityka-prywatnosci/"
+            id="linkPrivacy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             <span data-i18n="footerPrivacy">Privacy policy</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -84,7 +101,7 @@
               <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
           </a>
-          <a class="footer-link" href="#" id="linkSupport">
+          <a class="footer-link" href="mailto:kontakt@a2dsolutions.pl" id="linkSupport">
             <span data-i18n="footerSupport">Support</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -97,7 +114,7 @@
 
       <div class="workspace">
         <header class="topbar">
-          <div class="topbar__leading">
+          <div class="topbar__mobile-row">
             <button type="button" class="icon-btn" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="3" y1="12" x2="21" y2="12" />
@@ -105,16 +122,17 @@
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
             </button>
-            <a class="topbar__brand" href="/" aria-label="Home">
+            <a class="topbar__brand topbar__brand--mobile" href="/" aria-label="Home">
               <img
-                class="topbar__logo"
+                class="topbar__logo topbar__logo--mobile"
                 src="https://a2dsolutions.pl/wp-content/uploads/2022/11/Logo_horz_white.png"
                 alt=""
-                width="140"
-                height="31"
+                width="220"
+                height="48"
                 decoding="async"
               />
             </a>
+            <span class="topbar__mobile-spacer" aria-hidden="true"></span>
           </div>
           <div class="topbar__titles">
             <h1 class="page-title" id="pageTitle">Welcome</h1>
@@ -189,6 +207,10 @@
             </div>
           </section>
         </main>
+
+        <footer class="workspace-footer">
+          <p class="workspace-footer__text" id="workspaceFooterCopy"></p>
+        </footer>
       </div>
     </div>
     <script src="/app.js" type="module"></script>

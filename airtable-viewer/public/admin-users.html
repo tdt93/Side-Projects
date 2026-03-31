@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Users — A2D admin</title>
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <style>
+      :root {
+        --bg: #eef1f5;
+        --card: #fff;
+        --text: #1b2430;
+        --muted: #5a6573;
+        --border: #e0e4ea;
+        --accent: #4a90e2;
+        --err: #8f2d2d;
+        --ok: #1a6b3a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.5;
+        padding: 1.5rem;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 0.5rem;
+      }
+      p.lead {
+        margin: 0 0 1.25rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+      }
+      label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+      }
+      input[type="password"] {
+        width: 100%;
+        max-width: 420px;
+        padding: 0.55rem 0.65rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font: inherit;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+        margin-bottom: 1rem;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        padding: 0.55rem 1rem;
+        border: none;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .btn-save {
+        padding: 0.4rem 0.7rem;
+        font-size: 0.8125rem;
+      }
+      .msg {
+        font-size: 0.875rem;
+        margin: 0 0 0.75rem;
+      }
+      .msg--err {
+        color: var(--err);
+      }
+      .msg--ok {
+        color: var(--ok);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.5rem 0.65rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        background: #f7f8fa;
+      }
+      th.col-partner {
+        min-width: 220px;
+      }
+      tbody tr:nth-child(even) td {
+        background: #f9fafb;
+      }
+      .partner-edit {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      .inp-partner {
+        flex: 1;
+        min-width: 160px;
+        padding: 0.4rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font: inherit;
+        font-size: 0.8125rem;
+      }
+      .row-saved {
+        font-size: 0.7rem;
+        color: var(--ok);
+        width: 100%;
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Database users</h1>
+      <p class="lead">
+        Enter the same value as <code>ADMIN_USER_LIST_SECRET</code> in your server <code>.env</code>. This page is separate from partner login. Partner
+        filter must match the Airtable partner field for that user’s data.
+      </p>
+
+      <div class="card">
+        <div class="row">
+          <div style="flex: 1; min-width: 200px">
+            <label for="secret">Admin secret</label>
+            <input type="password" id="secret" autocomplete="off" placeholder="ADMIN_USER_LIST_SECRET" />
+          </div>
+          <button type="button" id="loadBtn">Load users</button>
+        </div>
+        <p id="msg" class="msg" hidden></p>
+        <div id="tableWrap" hidden>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Email</th>
+                <th class="col-partner">Partner filter</th>
+                <th>Password</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="lead"><a href="/">← Back to app</a></p>
+    </div>
+    <script>
+      const secretEl = document.getElementById("secret");
+      const loadBtn = document.getElementById("loadBtn");
+      const msg = document.getElementById("msg");
+      const tbody = document.getElementById("tbody");
+      const tableWrap = document.getElementById("tableWrap");
+
+      function showError(text) {
+        msg.hidden = false;
+        msg.className = "msg msg--err";
+        msg.textContent = text;
+      }
+
+      function showOk(text) {
+        msg.hidden = false;
+        msg.className = "msg";
+        msg.textContent = text;
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function escapeAttr(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;");
+      }
+
+      function renderRows(users) {
+        tbody.innerHTML = users
+          .map((u) => {
+            const em = escapeAttr(u.email);
+            const pf = escapeAttr(u.partner_filter ?? "");
+            return `<tr data-user-email="${em}">
+                  <td>${escapeHtml(String(u.id))}</td>
+                  <td>${escapeHtml(u.email)}</td>
+                  <td>
+                    <div class="partner-edit">
+                      <input type="text" class="inp-partner" value="${pf}" autocomplete="off" aria-label="Partner filter for ${escapeAttr(u.email)}" />
+                      <button type="button" class="btn-save">Save</button>
+                      <span class="row-saved" hidden>Saved</span>
+                    </div>
+                  </td>
+                  <td>${u.has_password ? "Yes" : "Google-only / none"}</td>
+                  <td>${escapeHtml(u.created_at || "—")}</td>
+                </tr>`;
+          })
+          .join("");
+      }
+
+      loadBtn.addEventListener("click", async () => {
+        const secret = secretEl.value.trim();
+        if (!secret) {
+          showError("Enter the admin secret.");
+          return;
+        }
+        loadBtn.disabled = true;
+        msg.hidden = true;
+        tableWrap.hidden = true;
+        tbody.innerHTML = "";
+
+        try {
+          const res = await fetch("/api/admin/users", {
+            headers: { "X-Admin-Secret": secret },
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showError(data.error || "Request failed (" + res.status + ")");
+            loadBtn.disabled = false;
+            return;
+          }
+          const users = data.users || [];
+          if (!users.length) {
+            showOk("No users in the database.");
+            loadBtn.disabled = false;
+            return;
+          }
+          renderRows(users);
+          tableWrap.hidden = false;
+          showOk(users.length + " user(s). Edit partner filter and click Save per row.");
+        } catch (e) {
+          showError(String(e.message || e));
+        }
+        loadBtn.disabled = false;
+      });
+
+      tbody.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".btn-save");
+        if (!btn || !tbody.contains(btn)) return;
+        const secret = secretEl.value.trim();
+        if (!secret) {
+          showError("Enter the admin secret first.");
+          return;
+        }
+        const tr = btn.closest("tr");
+        const email = tr?.dataset.userEmail;
+        if (!email) return;
+        const input = tr.querySelector(".inp-partner");
+        const saved = tr.querySelector(".row-saved");
+        const partnerVal = input.value.trim();
+
+        btn.disabled = true;
+        saved.hidden = true;
+        try {
+          const res = await fetch("/api/admin/users", {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Admin-Secret": secret,
+            },
+            body: JSON.stringify({
+              email,
+              partner_filter: partnerVal === "" ? "" : partnerVal,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showError(data.error || "Save failed (" + res.status + ")");
+            btn.disabled = false;
+            return;
+          }
+          input.value = data.user?.partner_filter ?? "";
+          saved.hidden = false;
+          msg.hidden = true;
+        } catch (err) {
+          showError(String(err.message || err));
+        }
+        btn.disabled = false;
+      });
+
+      tbody.addEventListener("input", (e) => {
+        const tr = e.target.closest("tr");
+        if (!tr) return;
+        const saved = tr.querySelector(".row-saved");
+        if (saved) saved.hidden = true;
+      });
+    </script>
+  </body>
+</html>
