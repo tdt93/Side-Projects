@@ -1,0 +1,10 @@
+# Render Blueprint: deploys the Node app from the `airtable-viewer` subfolder (monorepo root = this repo).
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: airtable-viewer
+    runtime: node
+    rootDir: airtable-viewer
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
