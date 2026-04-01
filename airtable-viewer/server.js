@@ -2,12 +2,13 @@ import dotenv from "dotenv";
 import express from "express";
 import path from "path";
 import session from "express-session";
+import SqliteStoreFactory from "better-sqlite3-session-store";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
-import { getUserByEmail, listUsers, updateUserPartnerFilter } from "./db.js";
+import { db, getUserByEmail, listUsers, updateUserPartnerFilter } from "./db.js";
 
 function formatCellValueForPartner(value) {
   if (value === null || value === undefined) return "";
@@ -168,6 +169,8 @@ function requireSessionSecret() {
 
 requireSessionSecret();
 
+const SqliteSessionStore = SqliteStoreFactory(session);
+
 passport.serializeUser((user, done) => {
   done(null, user.email);
 });
@@ -216,6 +219,10 @@ if (GOOGLE_ID && GOOGLE_SECRET) {
 app.use(express.json());
 app.use(
   session({
+    store: new SqliteSessionStore({
+      client: db,
+      expired: { clear: true, intervalMs: 15 * 60 * 1000 },
+    }),
     secret: SESSION_SECRET || "dev-insecure-change-me",
     resave: false,
     saveUninitialized: false,
