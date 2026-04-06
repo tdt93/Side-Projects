@@ -1,14 +1,13 @@
 import dotenv from "dotenv";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import session from "express-session";
 import SqliteStoreFactory from "better-sqlite3-session-store";
 import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
-import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import bcrypt from "bcryptjs";
 import { fileURLToPath } from "url";
 import { db, getUserByEmail, listUsers, updateUserPartnerFilter } from "./db.js";
+import { checkLoginLocked, clearLoginLockout, recordLoginFailure } from "./login-lockout.js";
 
 function formatCellValueForPartner(value) {
   if (value === null || value === undefined) return "";
@@ -73,18 +72,19 @@ const PAT = process.env.AIRTABLE_PAT;
 const BASE_ID = process.env.AIRTABLE_BASE_ID;
 const TABLE = stripEnvQuotes(process.env.AIRTABLE_TABLE_NAME);
 const SESSION_SECRET = process.env.SESSION_SECRET;
-const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
-const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_CALLBACK =
-  stripEnvQuotes(process.env.GOOGLE_CALLBACK_URL || "") ||
-  `${publicOrigin()}/api/auth/google/callback`;
+
+const PARTNERS_TABLE = stripEnvQuotes(process.env.AIRTABLE_PARTNERS_TABLE || "");
+const PARTNER_EMAIL_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_EMAIL_FIELD || "Email");
+const PARTNER_PHONE_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_PHONE_FIELD || "Kontakt");
+/** Value must match rows' partner field on Sprawy / Klienty (same as AIRTABLE_PARTNER_GROUP_FIELD labels). */
+const PARTNER_LABEL_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_LABEL_FIELD || "Partner");
 
 // =============================================================================
 // LIST VIEW & GROUPING — edit in .env only (no UI for these)
 // -----------------------------------------------------------------------------
 // AIRTABLE_PARTNER_GROUP_FIELD
-//   Airtable field name whose value must match the per-user partner_filter in SQLite (see add-user script).
-//   Rows with empty value or "BRAK" are excluded. Each user only sees rows for their assigned partner.
+//   On the cases (Sprawy) table: must match the partner label from the row in AIRTABLE_PARTNERS_TABLE (AIRTABLE_PARTNER_LABEL_FIELD).
+//   Rows with empty value or "BRAK" are excluded.
 //
 // AIRTABLE_LIST_VIEW_FIELDS
 //   Comma-separated Airtable field NAMES exactly as in the base.
@@ -149,6 +149,41 @@ const CACHE_TTL_MS = Math.max(15_000, (Number(process.env.AIRTABLE_CACHE_TTL_SEC
 /** If set, GET /api/admin/users with header X-Admin-Secret lists SQLite users (see /admin-users.html). */
 const ADMIN_USER_LIST_SECRET = stripEnvQuotes(process.env.ADMIN_USER_LIST_SECRET || "");
 
+function envRateInt(name, fallback) {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+/** Per-IP caps to reduce credential stuffing, OAuth abuse, and scraping. Authenticated /api traffic is skipped by apiLimiter. */
+const loginLimiter = rateLimit({
+  windowMs: envRateInt("RATE_LIMIT_LOGIN_WINDOW_MS", 15 * 60 * 1000),
+  max: envRateInt("RATE_LIMIT_LOGIN_MAX", 15),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts. Try again later." },
+});
+
+const adminRouteLimiter = rateLimit({
+  windowMs: envRateInt("RATE_LIMIT_ADMIN_WINDOW_MS", 15 * 60 * 1000),
+  max: envRateInt("RATE_LIMIT_ADMIN_MAX", 40),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many admin requests. Try again later." },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: envRateInt("RATE_LIMIT_API_PER_MIN", 120),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests. Try again later." },
+  skip: (req) => {
+    if (req.path === "/health") return true;
+    if (typeof req.isAuthenticated === "function" && req.isAuthenticated()) return true;
+    return false;
+  },
+});
+
 /** @type {Map<string, { records: unknown[], ts: number }>} */
 const tableCache = new Map();
 
@@ -157,7 +192,27 @@ function requireEnv() {
   if (!PAT) missing.push("AIRTABLE_PAT");
   if (!BASE_ID) missing.push("AIRTABLE_BASE_ID");
   if (!TABLE) missing.push("AIRTABLE_TABLE_NAME");
+  if (!PARTNERS_TABLE) missing.push("AIRTABLE_PARTNERS_TABLE");
   return missing;
+}
+
+function normalizeEmailLogin(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePhoneLogin(s) {
+  return String(s ?? "").replace(/\D/g, "");
+}
+
+function lockoutMessageMs(remainingMs) {
+  const m = Math.ceil(remainingMs / 60000);
+  if (m >= 60) {
+    const h = Math.ceil(m / 60);
+    return `Too many failed attempts. Try again in about ${h} hour(s).`;
+  }
+  return `Too many failed attempts. Try again in about ${Math.max(1, m)} minute(s).`;
 }
 
 function requireSessionSecret() {
@@ -172,48 +227,42 @@ requireSessionSecret();
 const SqliteSessionStore = SqliteStoreFactory(session);
 
 passport.serializeUser((user, done) => {
-  done(null, user.email);
-});
-
-passport.deserializeUser((email, done) => {
-  const row = getUserByEmail(email);
-  done(null, row ? { email: row.email } : null);
-});
-
-passport.use(
-  new LocalStrategy(
-    { usernameField: "email", passwordField: "password" },
-    (email, password, done) => {
-      const row = getUserByEmail(email);
-      if (!row || !row.password_hash) {
-        return done(null, false);
-      }
-      if (!bcrypt.compareSync(password, row.password_hash)) {
-        return done(null, false);
-      }
-      return done(null, { email: row.email });
-    }
-  )
-);
-
-if (GOOGLE_ID && GOOGLE_SECRET) {
-  passport.use(
-    new GoogleStrategy(
-      {
-        clientID: GOOGLE_ID,
-        clientSecret: GOOGLE_SECRET,
-        callbackURL: GOOGLE_CALLBACK,
-        scope: ["profile", "email"],
-      },
-      (_accessToken, _refreshToken, profile, done) => {
-        const email = profile.emails?.[0]?.value?.toLowerCase?.()?.trim();
-        if (!email) return done(null, false);
-        const row = getUserByEmail(email);
-        if (!row) return done(null, false);
-        return done(null, { email: row.email });
-      }
-    )
+  done(
+    null,
+    JSON.stringify({ email: user.email, partnerFilter: user.partnerFilter })
   );
+});
+
+passport.deserializeUser((serialized, done) => {
+  try {
+    const u = JSON.parse(String(serialized));
+    if (u && typeof u.email === "string" && typeof u.partnerFilter === "string" && u.partnerFilter) {
+      return done(null, { email: u.email, partnerFilter: u.partnerFilter });
+    }
+  } catch {
+    /* ignore */
+  }
+  done(null, null);
+});
+
+/**
+ * @param {string} emailNorm
+ * @param {string} phoneNorm
+ * @returns {Promise<string | null>} partner label for filtering cases, or null if no match
+ */
+async function findPartnerFilterFromAirtable(emailNorm, phoneNorm) {
+  if (!emailNorm || !phoneNorm) return null;
+  const records = await fetchAllRecordsFromTable(PARTNERS_TABLE);
+  for (const rec of records) {
+    const fields = rec?.fields || {};
+    const em = normalizeEmailLogin(fields[PARTNER_EMAIL_FIELD]);
+    const ph = normalizePhoneLogin(partnerValueFromRecord(rec, PARTNER_PHONE_FIELD));
+    if (em === emailNorm && ph === phoneNorm) {
+      const label = partnerValueFromRecord(rec, PARTNER_LABEL_FIELD).trim();
+      if (label) return label;
+    }
+  }
+  return null;
 }
 
 app.use(express.json());
@@ -236,6 +285,8 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+
+app.use("/api", apiLimiter);
 
 function requireAuth(req, res, next) {
   if (!req.isAuthenticated || !req.isAuthenticated()) {
@@ -286,15 +337,10 @@ async function getCachedTableRecords(tableName) {
   return records;
 }
 
-function googleEnabled() {
-  return Boolean(GOOGLE_ID && GOOGLE_SECRET);
-}
-
 app.get("/api/config", (_req, res) => {
   const airtableMissing = requireEnv();
   const clientCols = parseClientListColumns();
   res.json({
-    googleAuth: googleEnabled(),
     airtableConfigured: airtableMissing.length === 0,
     partnerGroupField: PARTNER_GROUP_FIELD,
     listViewColumns: parseListViewColumns(),
@@ -314,11 +360,13 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/me", (req, res) => {
-  if (!req.user) return res.status(401).json({ user: null });
-  res.json({ user: req.user });
+  if (!req.user?.email) return res.status(401).json({ user: null });
+  res.json({
+    user: { email: req.user.email, partnerFilter: req.user.partnerFilter },
+  });
 });
 
-app.get("/api/admin/users", (req, res) => {
+app.get("/api/admin/users", adminRouteLimiter, (req, res) => {
   if (!ADMIN_USER_LIST_SECRET) {
     return res.status(503).json({
       error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
@@ -335,7 +383,7 @@ app.get("/api/admin/users", (req, res) => {
   }
 });
 
-app.patch("/api/admin/users", (req, res) => {
+app.patch("/api/admin/users", adminRouteLimiter, (req, res) => {
   if (!ADMIN_USER_LIST_SECRET) {
     return res.status(503).json({
       error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
@@ -369,17 +417,55 @@ app.patch("/api/admin/users", (req, res) => {
   }
 });
 
-app.post("/api/login", (req, res, next) => {
-  passport.authenticate("local", (err, user) => {
-    if (err) return next(err);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid email or password" });
+app.post("/api/login", loginLimiter, async (req, res, next) => {
+  const missing = requireEnv();
+  if (missing.length) {
+    return res.status(503).json({ error: "Server missing configuration", missing });
+  }
+
+  const emailRaw = String(req.body?.email || "").trim();
+  const phoneRaw = String(req.body?.phone || "").trim();
+  const emailNorm = normalizeEmailLogin(emailRaw);
+  const phoneNorm = normalizePhoneLogin(phoneRaw);
+
+  if (!emailNorm || !phoneNorm) {
+    return res.status(400).json({ error: "Email and phone number are required." });
+  }
+
+  const locked = checkLoginLocked(req, emailNorm);
+  if (locked.locked) {
+    const retryAfterSec = Math.max(1, Math.ceil((locked.lockUntil - Date.now()) / 1000));
+    res.set("Retry-After", String(retryAfterSec));
+    return res.status(429).json({
+      error: lockoutMessageMs(locked.lockUntil - Date.now()),
+      retryAfterSec,
+    });
+  }
+
+  try {
+    const partnerFilter = await findPartnerFilterFromAirtable(emailNorm, phoneNorm);
+    if (!partnerFilter) {
+      const outcome = recordLoginFailure(req, emailNorm);
+      if (outcome.locked) {
+        const retryAfterSec = Math.max(1, Math.ceil((outcome.lockUntil - Date.now()) / 1000));
+        res.set("Retry-After", String(retryAfterSec));
+        return res.status(429).json({
+          error: lockoutMessageMs(outcome.lockUntil - Date.now()),
+          retryAfterSec,
+        });
+      }
+      return res.status(401).json({ error: "Invalid email or phone number." });
     }
+
+    clearLoginLockout(req, emailNorm);
+    const user = { email: emailNorm, partnerFilter };
     req.logIn(user, (e) => {
       if (e) return next(e);
       res.json({ user: { email: user.email } });
     });
-  })(req, res, next);
+  } catch (e) {
+    next(e);
+  }
 });
 
 app.post("/api/logout", (req, res, next) => {
@@ -388,16 +474,6 @@ app.post("/api/logout", (req, res, next) => {
     res.json({ ok: true });
   });
 });
-
-if (googleEnabled()) {
-  app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
-
-  app.get(
-    "/api/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/?auth=denied" }),
-    (req, res) => res.redirect("/")
-  );
-}
 
 app.get("/api/records", requireAuth, async (req, res) => {
   const missing = requireEnv();
@@ -409,8 +485,7 @@ app.get("/api/records", requireAuth, async (req, res) => {
   }
 
   try {
-    const row = getUserByEmail(req.user?.email);
-    const expected = row?.partner_filter?.trim();
+    const expected = req.user?.partnerFilter?.trim();
 
     if (!expected) {
       return res.json({
@@ -461,8 +536,7 @@ app.get("/api/clients", requireAuth, async (req, res) => {
   }
 
   try {
-    const row = getUserByEmail(req.user?.email);
-    const expected = row?.partner_filter?.trim();
+    const expected = req.user?.partnerFilter?.trim();
 
     if (!expected) {
       return res.json({
@@ -503,7 +577,7 @@ app.listen(PORT, () => {
   if (!SESSION_SECRET && process.env.NODE_ENV === "production") {
     console.warn("Set SESSION_SECRET in production");
   }
-  if (!googleEnabled()) {
-    console.warn("Optional: set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET for Google sign-in");
+  if (!PARTNERS_TABLE) {
+    console.warn("Set AIRTABLE_PARTNERS_TABLE (Partner table) for login.");
   }
 });

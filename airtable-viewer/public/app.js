@@ -20,8 +20,6 @@ const loginForm = document.getElementById("loginForm");
 const loginFlash = document.getElementById("loginFlash");
 
 const loginHeading = document.getElementById("loginHeading");
-const googleBtn = document.getElementById("googleBtn");
-const googleDivider = document.getElementById("googleDivider");
 
 const filterEl = document.getElementById("filter");
 const sortFieldEl = document.getElementById("sortField");
@@ -73,7 +71,7 @@ const i18n = {
     welcomeTitle: "Welcome",
     loggedInTitle: "Records",
     loginHeading: "Sign in",
-    loginLead: "Only registered accounts can access this workspace.",
+    loginLead: "Sign in with your business email and phone number.",
     guestSubtitle: "Please sign in to check your cases",
     loadingBase: "Loading",
     findSortLabel: "Find & sort",
@@ -92,14 +90,10 @@ const i18n = {
     configMissing: "Configure the server: set {vars} in .env and restart.",
     listFieldsMissing:
       "Set VIEW_FIELDS",
-    googleDenied: "Google sign-in is only available for emails your administrator has added.",
-    googleSignInLabel: "Sign in with Google",
     pageInfoShort: "page: {page}/{pages}",
     emailLabel: "Email",
-    passwordLabel: "Password",
-    loginOrDivider: "or",
-    passwordHint:
-      "Use the password your administrator set. Google sign-in is optional and only works if it is enabled and your email was added to the system.",
+    phoneLabel: "Phone number",
+    loginHint: "Use the same email and phone number (Kontakt) as in the Partner list your administrator maintains.",
     footerPrivacy: "Privacy policy",
     footerSupport: "Support",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -109,9 +103,9 @@ const i18n = {
     notConfiguredSubtitle: "Not configured",
     errorSubtitle: "Error",
     noPartnerFilter:
-      "Your account has no partner assigned. Ask your administrator to set partner",
+      "Your partner row in Airtable is missing the partner name used for case matching. Ask your administrator to fill that field.",
     loginEmailRequired: "Enter your email.",
-    loginPasswordRequired: "Enter your password or use Google.",
+    loginPhoneRequired: "Enter your phone number.",
     loginFailed: "Sign-in failed.",
     col_fullname: "Full name",
     col_dob: "Date of birth",
@@ -137,7 +131,7 @@ const i18n = {
     welcomeTitle: "Chào mừng",
     loggedInTitle: "Danh sách",
     loginHeading: "Đăng nhập",
-    loginLead: "Chỉ các tài khoản đã được cấp mới có thể truy cập.",
+    loginLead: "Đăng nhập bằng email doanh nghiệp và số điện thoại.",
     guestSubtitle: "Vui lòng đăng nhập để kiểm tra các hồ sơ của bạn",
     loadingBase: "Đang tải",
     findSortLabel: "Tìm kiếm & sắp xếp",
@@ -156,14 +150,10 @@ const i18n = {
     configMissing: "Cấu hình server: đặt {vars} trong .env và khởi động lại.",
     listFieldsMissing:
       "Đặt VIEW_FIELDS",
-    googleDenied: "Đăng nhập Google chỉ hoạt động với các email đã được quản trị viên thêm.",
-    googleSignInLabel: "Đăng nhập với Google",
     pageInfoShort: "trang: {page}/{pages}",
     emailLabel: "Email",
-    passwordLabel: "Mật khẩu",
-    loginOrDivider: "hoặc",
-    passwordHint:
-      "Dùng mật khẩu do quản trị viên cấp. Đăng nhập Google là tùy chọn và chỉ hoạt động khi được bật và email của bạn đã được thêm vào hệ thống.",
+    phoneLabel: "Số điện thoại",
+    loginHint: "Dùng cùng email và số điện thoại (Kontakt) như trong danh sách Đối tác do quản trị viên quản lý.",
     footerPrivacy: "Chính sách riêng tư",
     footerSupport: "Hỗ trợ",
     documentTitleGuest: "Chào mừng — A2D Solutions",
@@ -171,9 +161,9 @@ const i18n = {
     notConfiguredSubtitle: "Chưa cấu hình",
     errorSubtitle: "Lỗi",
     noPartnerFilter:
-      "Tài khoản của bạn chưa được gán đối tác. Nhờ quản trị viên đặt partner",
+      "Dòng đối tác trên Airtable thiếu tên dùng để khớp hồ sơ. Nhờ quản trị viên điền trường đó.",
     loginEmailRequired: "Nhập email của bạn.",
-    loginPasswordRequired: "Nhập mật khẩu hoặc dùng Google.",
+    loginPhoneRequired: "Nhập số điện thoại.",
     loginFailed: "Đăng nhập thất bại.",
     col_fullname: "Họ và tên",
     col_dob: "Ngày sinh",
@@ -201,7 +191,7 @@ const i18n = {
     welcomeTitle: "Witamy",
     loggedInTitle: "Rekordy",
     loginHeading: "Zaloguj się",
-    loginLead: "Tylko zarejestrowani użytkownicy mają dostęp do tego obszaru.",
+    loginLead: "Zaloguj się firmowym adresem e-mail i numerem telefonu.",
     guestSubtitle: "Zaloguj się, aby sprawdzić swoje sprawy",
     loadingBase: "Ładowanie",
     findSortLabel: "Szukaj i sortuj",
@@ -220,14 +210,10 @@ const i18n = {
     configMissing: "Skonfiguruj serwer: ustaw {vars} w .env i uruchom ponownie.",
     listFieldsMissing:
       "Ustaw VIEW_FIELDS",
-    googleDenied: "Logowanie Google działa tylko dla adresów dodanych przez administratora.",
-    googleSignInLabel: "Zaloguj się przez Google",
     pageInfoShort: "strona: {page}/{pages}",
     emailLabel: "E-mail",
-    passwordLabel: "Hasło",
-    loginOrDivider: "lub",
-    passwordHint:
-      "Użyj hasła ustawionego przez administratora. Logowanie Google jest opcjonalne i działa tylko wtedy, gdy jest włączone oraz Twój adres e-mail został dodany do systemu.",
+    phoneLabel: "Numer telefonu",
+    loginHint: "Użyj tego samego e-maila i numeru telefonu (Kontakt), co na liście Partnerów prowadzonej przez administratora.",
     footerPrivacy: "Polityka prywatności",
     footerSupport: "Wsparcie",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -237,9 +223,9 @@ const i18n = {
     notConfiguredSubtitle: "Brak konfiguracji",
     errorSubtitle: "Błąd",
     noPartnerFilter:
-      "Na koncie nie przypisano partnera. Poproś administratora o ustawienie partner",
+      "W wierszu partnera w Airtable brakuje nazwy używanej do dopasowania spraw. Poproś administratora o uzupełnienie tego pola.",
     loginEmailRequired: "Podaj adres e-mail.",
-    loginPasswordRequired: "Podaj hasło lub użyj Google.",
+    loginPhoneRequired: "Podaj numer telefonu.",
     loginFailed: "Logowanie nie powiodło się.",
     col_fullname: "Imię i nazwisko",
     col_dob: "Data urodzenia",
@@ -573,20 +559,14 @@ function applyI18n() {
   refreshDocumentTitle();
 }
 
-function showAuthDenied() {
-  loginFlash.hidden = false;
-  loginFlash.textContent = t("googleDenied");
-}
-
 function applyUrlAuthFlags() {
   const params = new URLSearchParams(window.location.search);
-  if (params.get("auth") === "denied") showAuthDenied();
-}
-
-function showGoogleUI(enabled) {
-  if (!googleDivider || !googleBtn) return;
-  googleDivider.hidden = !enabled;
-  googleBtn.hidden = !enabled;
+  if (params.get("auth") === "denied") {
+    if (loginFlash) {
+      loginFlash.hidden = false;
+      loginFlash.textContent = t("loginFailed");
+    }
+  }
 }
 
 function applyServerConfig(cfg) {
@@ -769,7 +749,6 @@ async function bootstrapSession() {
     fetch("/api/config", fetchOpts).then((r) => r.json()),
   ]);
 
-  showGoogleUI(Boolean(cfgRes.googleAuth));
   applyServerConfig(cfgRes);
 
   if (meRes.ok) {
@@ -865,16 +844,16 @@ loginForm?.addEventListener("submit", async (e) => {
 
   const fd = new FormData(loginForm);
   const email = String(fd.get("email") || "").trim();
-  const password = String(fd.get("password") || "");
+  const phone = String(fd.get("phone") || "").trim();
 
   if (!email) {
     loginFlash.hidden = false;
     loginFlash.textContent = t("loginEmailRequired");
     return;
   }
-  if (!password) {
+  if (!phone) {
     loginFlash.hidden = false;
-    loginFlash.textContent = t("loginPasswordRequired");
+    loginFlash.textContent = t("loginPhoneRequired");
     return;
   }
 
@@ -882,7 +861,7 @@ loginForm?.addEventListener("submit", async (e) => {
     ...fetchOpts,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, phone }),
   });
 
   const data = await res.json().catch(() => ({}));

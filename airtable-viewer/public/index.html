@@ -144,7 +144,7 @@
           <section class="login-panel" id="loginView" aria-labelledby="loginHeading">
             <div class="card card--login">
               <h2 class="card__title" id="loginHeading" data-i18n="loginHeading">Sign in</h2>
-              <p class="card__lead" data-i18n="loginLead">Only registered accounts can access this workspace.</p>
+              <p class="card__lead" data-i18n="loginLead">Sign in with your business email and phone number.</p>
 
               <div id="loginFlash" class="flash" role="alert" hidden></div>
 
@@ -154,22 +154,20 @@
                   <input type="email" name="email" class="input input--light" autocomplete="username" required />
                 </label>
                 <label class="field field--login">
-                  <span class="field__label" data-i18n="passwordLabel">Password</span>
-                  <input type="password" name="password" class="input input--light" autocomplete="current-password" />
+                  <span class="field__label" data-i18n="phoneLabel">Phone number</span>
+                  <input
+                    type="tel"
+                    name="phone"
+                    class="input input--light"
+                    autocomplete="tel"
+                    inputmode="tel"
+                    required
+                  />
                 </label>
                 <button type="submit" class="btn btn--primary" data-i18n="signInLabel">Sign in</button>
               </form>
 
-              <div class="login__divider" id="googleDivider" hidden>
-                <span data-i18n="loginOrDivider">or</span>
-              </div>
-
-              <a class="btn btn--google" id="googleBtn" href="/api/auth/google" hidden>
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" width="18" height="18" />
-                <span data-i18n="googleSignInLabel">Sign in with Google</span>
-              </a>
-
-              <p class="login__hint" id="passwordHint" data-i18n="passwordHint"></p>
+              <p class="login__hint" id="loginHint" data-i18n="loginHint"></p>
             </div>
           </section>
 
