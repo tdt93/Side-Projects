@@ -315,6 +315,8 @@ app.use(
     secret: SESSION_SECRET || "dev-insecure-change-me",
     resave: false,
     saveUninitialized: false,
+    /** Required on Render / other reverse proxies so secure cookies respect X-Forwarded-Proto. */
+    proxy: true,
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000,
       secure: process.env.NODE_ENV === "production",
@@ -400,8 +402,11 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/me", (req, res) => {
-  if (!req.user?.email) return res.status(401).json({ user: null });
-  res.json({
+  res.set("Cache-Control", "no-store");
+  if (!req.user?.email) {
+    return res.status(200).json({ user: null });
+  }
+  res.status(200).json({
     user: { email: req.user.email, partnerFilter: req.user.partnerFilter },
   });
 });
@@ -511,7 +516,10 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
     const user = { email: emailNorm, partnerFilter };
     req.logIn(user, (e) => {
       if (e) return next(e);
-      res.json({ user: { email: user.email } });
+      req.session.save((saveErr) => {
+        if (saveErr) return next(saveErr);
+        res.json({ user: { email: user.email } });
+      });
     });
   } catch (e) {
     next(e);
