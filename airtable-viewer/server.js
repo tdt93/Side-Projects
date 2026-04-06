@@ -206,6 +206,44 @@ function normalizePhoneLogin(s) {
   return String(s ?? "").replace(/\D/g, "");
 }
 
+/** Airtable field names in API responses are usually exact, but casing can differ from .env — resolve case-insensitively. */
+function getFieldCI(fields, wanted) {
+  if (!fields || !wanted) return undefined;
+  if (Object.prototype.hasOwnProperty.call(fields, wanted)) return fields[wanted];
+  const w = String(wanted).toLowerCase();
+  for (const k of Object.keys(fields)) {
+    if (k.toLowerCase() === w) return fields[k];
+  }
+  return undefined;
+}
+
+function cellEmailString(raw) {
+  if (raw == null || raw === "") return "";
+  if (typeof raw === "string") return raw.trim();
+  if (typeof raw === "object" && raw !== null && "email" in raw) {
+    return String(/** @type {{ email?: string }} */ (raw).email ?? "").trim();
+  }
+  return String(formatCellValueForPartner(raw)).trim();
+}
+
+/** Same digits, or same national number with optional country prefix (e.g. 48… vs no prefix). */
+function phonesMatchDigits(normA, normB) {
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+  const longer = normA.length >= normB.length ? normA : normB;
+  const shorter = normA.length >= normB.length ? normB : normA;
+  if (shorter.length < 9) return false;
+  if (longer.endsWith(shorter) && longer.length - shorter.length <= 4) return true;
+  return false;
+}
+
+function partnerFieldFromRecord(rec, fieldName) {
+  const raw = getFieldCI(rec?.fields || {}, fieldName);
+  if (raw === undefined || raw === null) return "";
+  if (typeof raw === "string") return raw;
+  return formatCellValueForPartner(raw);
+}
+
 function lockoutMessageMs(remainingMs) {
   const m = Math.ceil(remainingMs / 60000);
   if (m >= 60) {
@@ -248,21 +286,23 @@ passport.deserializeUser((serialized, done) => {
 /**
  * @param {string} emailNorm
  * @param {string} phoneNorm
- * @returns {Promise<string | null>} partner label for filtering cases, or null if no match
+ * @returns {Promise<{ ok: true, partnerFilter: string } | { ok: false, code: "no_match" | "empty_partner_field" }>}
  */
-async function findPartnerFilterFromAirtable(emailNorm, phoneNorm) {
-  if (!emailNorm || !phoneNorm) return null;
+async function resolvePartnerLogin(emailNorm, phoneNorm) {
+  if (!emailNorm || !phoneNorm) return { ok: false, code: "no_match" };
   const records = await fetchAllRecordsFromTable(PARTNERS_TABLE);
+  let matchedEmptyLabel = false;
   for (const rec of records) {
-    const fields = rec?.fields || {};
-    const em = normalizeEmailLogin(fields[PARTNER_EMAIL_FIELD]);
-    const ph = normalizePhoneLogin(partnerValueFromRecord(rec, PARTNER_PHONE_FIELD));
-    if (em === emailNorm && ph === phoneNorm) {
-      const label = partnerValueFromRecord(rec, PARTNER_LABEL_FIELD).trim();
-      if (label) return label;
+    const em = normalizeEmailLogin(cellEmailString(getFieldCI(rec?.fields || {}, PARTNER_EMAIL_FIELD)));
+    const ph = normalizePhoneLogin(partnerFieldFromRecord(rec, PARTNER_PHONE_FIELD));
+    if (em === emailNorm && phonesMatchDigits(ph, phoneNorm)) {
+      const label = partnerFieldFromRecord(rec, PARTNER_LABEL_FIELD).trim();
+      if (label) return { ok: true, partnerFilter: label };
+      matchedEmptyLabel = true;
     }
   }
-  return null;
+  if (matchedEmptyLabel) return { ok: false, code: "empty_partner_field" };
+  return { ok: false, code: "no_match" };
 }
 
 app.use(express.json());
@@ -443,8 +483,14 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   }
 
   try {
-    const partnerFilter = await findPartnerFilterFromAirtable(emailNorm, phoneNorm);
-    if (!partnerFilter) {
+    const resolved = await resolvePartnerLogin(emailNorm, phoneNorm);
+    if (!resolved.ok) {
+      if (resolved.code === "empty_partner_field") {
+        return res.status(403).json({
+          error:
+            "Your row in the Partner table matches, but the partner name field used for case filtering is empty. Set AIRTABLE_PARTNER_LABEL_FIELD to your Airtable column name and fill that cell (same spelling as on Sprawy/Klienty).",
+        });
+      }
       const outcome = recordLoginFailure(req, emailNorm);
       if (outcome.locked) {
         const retryAfterSec = Math.max(1, Math.ceil((outcome.lockUntil - Date.now()) / 1000));
@@ -454,9 +500,13 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
           retryAfterSec,
         });
       }
-      return res.status(401).json({ error: "Invalid email or phone number." });
+      return res.status(401).json({
+        error:
+          "Invalid email or phone number. Use the same Email and Kontakt as in your Partner table (digits only must match for the phone, with or without country code).",
+      });
     }
 
+    const { partnerFilter } = resolved;
     clearLoginLockout(req, emailNorm);
     const user = { email: emailNorm, partnerFilter };
     req.logIn(user, (e) => {
