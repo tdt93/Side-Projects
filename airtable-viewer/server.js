@@ -160,7 +160,12 @@ const loginLimiter = rateLimit({
   max: envRateInt("RATE_LIMIT_LOGIN_MAX", 15),
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many login attempts. Try again later." },
+  handler: (_req, res) => {
+    res.status(429).json({
+      errorCode: "LOGIN_RATE_LIMIT",
+      error: "Too many login attempts.",
+    });
+  },
 });
 
 const adminRouteLimiter = rateLimit({
@@ -242,15 +247,6 @@ function partnerFieldFromRecord(rec, fieldName) {
   if (raw === undefined || raw === null) return "";
   if (typeof raw === "string") return raw;
   return formatCellValueForPartner(raw);
-}
-
-function lockoutMessageMs(remainingMs) {
-  const m = Math.ceil(remainingMs / 60000);
-  if (m >= 60) {
-    const h = Math.ceil(m / 60);
-    return `Too many failed attempts. Try again in about ${h} hour(s).`;
-  }
-  return `Too many failed attempts. Try again in about ${Math.max(1, m)} minute(s).`;
 }
 
 function requireSessionSecret() {
@@ -465,7 +461,11 @@ app.patch("/api/admin/users", adminRouteLimiter, (req, res) => {
 app.post("/api/login", loginLimiter, async (req, res, next) => {
   const missing = requireEnv();
   if (missing.length) {
-    return res.status(503).json({ error: "Server missing configuration", missing });
+    return res.status(503).json({
+      errorCode: "SERVER_CONFIG",
+      error: "Server missing configuration",
+      missing,
+    });
   }
 
   const emailRaw = String(req.body?.email || "").trim();
@@ -474,7 +474,10 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   const phoneNorm = normalizePhoneLogin(phoneRaw);
 
   if (!emailNorm || !phoneNorm) {
-    return res.status(400).json({ error: "Email and phone number are required." });
+    return res.status(400).json({
+      errorCode: "LOGIN_MISSING_FIELDS",
+      error: "Email and phone number are required.",
+    });
   }
 
   const locked = checkLoginLocked(req, emailNorm);
@@ -482,8 +485,9 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
     const retryAfterSec = Math.max(1, Math.ceil((locked.lockUntil - Date.now()) / 1000));
     res.set("Retry-After", String(retryAfterSec));
     return res.status(429).json({
-      error: lockoutMessageMs(locked.lockUntil - Date.now()),
+      errorCode: "LOGIN_LOCKED",
       retryAfterSec,
+      error: "Account temporarily locked.",
     });
   }
 
@@ -492,8 +496,8 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
     if (!resolved.ok) {
       if (resolved.code === "empty_partner_field") {
         return res.status(403).json({
-          error:
-            "Your row in the Partner table matches, but the partner name field used for case filtering is empty. Set AIRTABLE_PARTNER_LABEL_FIELD to your Airtable column name and fill that cell (same spelling as on Sprawy/Klienty).",
+          errorCode: "LOGIN_PARTNER_FIELD_EMPTY",
+          error: "Partner profile incomplete.",
         });
       }
       const outcome = recordLoginFailure(req, emailNorm);
@@ -501,13 +505,14 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
         const retryAfterSec = Math.max(1, Math.ceil((outcome.lockUntil - Date.now()) / 1000));
         res.set("Retry-After", String(retryAfterSec));
         return res.status(429).json({
-          error: lockoutMessageMs(outcome.lockUntil - Date.now()),
+          errorCode: "LOGIN_LOCKED_AFTER_FAIL",
           retryAfterSec,
+          error: "Account temporarily locked.",
         });
       }
       return res.status(401).json({
-        error:
-          "Invalid email or phone number. Use the same Email and Kontakt as in your Partner table (digits only must match for the phone, with or without country code).",
+        errorCode: "LOGIN_INVALID",
+        error: "Invalid credentials.",
       });
     }
 

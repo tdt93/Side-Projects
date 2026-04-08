@@ -126,6 +126,16 @@ const i18n = {
     loginEmailRequired: "Enter your email.",
     loginPhoneRequired: "Enter your phone number.",
     loginFailed: "Sign-in failed.",
+    loginErrorInvalid:
+      "Invalid email or phone number. Use the same Email and phone number provided to our service (digits only must match for the phone, with or without country code).",
+    loginErrorPartnerFieldEmpty:
+      "Your partner record is incomplete: the partner name used to filter cases is missing. Contact your administrator.",
+    loginLockedMinutes: "Too many failed attempts. Try again in about {minutes} minute(s).",
+    loginLockedHours: "Too many failed attempts. Try again in about {hours} hour(s).",
+    loginErrorLockedGeneric: "Too many failed attempts. Please try again later.",
+    loginErrorRateLimit: "Too many login attempts. Please wait and try again.",
+    loginErrorMissingFields: "Enter your email and phone number.",
+    loginErrorServerConfig: "The service is temporarily unavailable. Please try again later.",
     col_fullname: "Full name",
     col_dob: "Date of birth",
     col_passportNr: "Passport nr.",
@@ -184,6 +194,16 @@ const i18n = {
     loginEmailRequired: "Nhập email của bạn.",
     loginPhoneRequired: "Nhập số điện thoại.",
     loginFailed: "Đăng nhập thất bại.",
+    loginErrorInvalid:
+      "Email hoặc số điện thoại không đúng. Dùng cùng email và số điện thoại đã cung cấp cho dịch vụ của chúng tôi (chỉ cần khớp các chữ số, có hoặc không có mã quốc gia).",
+    loginErrorPartnerFieldEmpty:
+      "Hồ sơ đối tác chưa đủ: thiếu tên dùng để lọc hồ sơ. Liên hệ quản trị viên.",
+    loginLockedMinutes: "Quá nhiều lần thử không thành công. Thử lại sau khoảng {minutes} phút.",
+    loginLockedHours: "Quá nhiều lần thử không thành công. Thử lại sau khoảng {hours} giờ.",
+    loginErrorLockedGeneric: "Quá nhiều lần thử không thành công. Vui lòng thử lại sau.",
+    loginErrorRateLimit: "Bạn đã đăng nhập quá nhiều lần. Vui lòng đợi rồi thử lại.",
+    loginErrorMissingFields: "Vui lòng nhập email và số điện thoại.",
+    loginErrorServerConfig: "Dịch vụ tạm thời không khả dụng. Vui lòng thử lại sau.",
     col_fullname: "Họ và tên",
     col_dob: "Ngày sinh",
     col_passportNr: "Số hộ chiếu",
@@ -246,6 +266,16 @@ const i18n = {
     loginEmailRequired: "Podaj adres e-mail.",
     loginPhoneRequired: "Podaj numer telefonu.",
     loginFailed: "Logowanie nie powiodło się.",
+    loginErrorInvalid:
+      "Nieprawidłowy adres e-mail lub numer telefonu. Użyj tego samego e-maila i numeru telefonu, które przekazaliście naszej obsłudze (wystarczy zgodność cyfr, z numerem kierunkowym kraju lub bez).",
+    loginErrorPartnerFieldEmpty:
+      "Profil partnera jest niepełny: brakuje nazwy używanej do filtrowania spraw. Skontaktuj się z administratorem.",
+    loginLockedMinutes: "Zbyt wiele nieudanych prób. Spróbuj ponownie za około {minutes} min.",
+    loginLockedHours: "Zbyt wiele nieudanych prób. Spróbuj ponownie za około {hours} godz.",
+    loginErrorLockedGeneric: "Zbyt wiele nieudanych prób. Spróbuj ponownie później.",
+    loginErrorRateLimit: "Zbyt wiele prób logowania. Odczekaj chwilę i spróbuj ponownie.",
+    loginErrorMissingFields: "Podaj adres e-mail i numer telefonu.",
+    loginErrorServerConfig: "Usługa jest tymczasowo niedostępna. Spróbuj ponownie później.",
     col_fullname: "Imię i nazwisko",
     col_dob: "Data urodzenia",
     col_passportNr: "Nr paszportu",
@@ -270,6 +300,38 @@ let currentLang = "vi";
 function t(key) {
   const dict = i18n[currentLang] || i18n.en;
   return dict[key] ?? i18n.en[key] ?? key;
+}
+
+function formatLoginLockMessage(retryAfterSec) {
+  const sec = Math.max(1, Number(retryAfterSec) || 60);
+  const m = Math.ceil(sec / 60);
+  if (m >= 60) {
+    const h = Math.ceil(m / 60);
+    return t("loginLockedHours").replace("{hours}", String(h));
+  }
+  return t("loginLockedMinutes").replace("{minutes}", String(Math.max(1, m)));
+}
+
+/** @param {{ errorCode?: string, error?: string, retryAfterSec?: number }} data */
+function messageFromLoginError(data) {
+  const code = data?.errorCode;
+  switch (code) {
+    case "LOGIN_INVALID":
+      return t("loginErrorInvalid");
+    case "LOGIN_PARTNER_FIELD_EMPTY":
+      return t("loginErrorPartnerFieldEmpty");
+    case "LOGIN_LOCKED":
+    case "LOGIN_LOCKED_AFTER_FAIL":
+      return data?.retryAfterSec != null ? formatLoginLockMessage(data.retryAfterSec) : t("loginErrorLockedGeneric");
+    case "LOGIN_RATE_LIMIT":
+      return t("loginErrorRateLimit");
+    case "LOGIN_MISSING_FIELDS":
+      return t("loginErrorMissingFields");
+    case "SERVER_CONFIG":
+      return t("loginErrorServerConfig");
+    default:
+      return data?.error || t("loginFailed");
+  }
 }
 
 function escapeHtml(str) {
@@ -676,7 +738,7 @@ function applyUrlAuthFlags() {
   if (params.get("auth") === "denied") {
     if (loginFlash) {
       loginFlash.hidden = false;
-      loginFlash.textContent = t("loginFailed");
+      loginFlash.textContent = t("loginErrorInvalid");
     }
   }
 }
@@ -993,7 +1055,7 @@ loginForm?.addEventListener("submit", async (e) => {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     loginFlash.hidden = false;
-    loginFlash.textContent = data.error || t("loginFailed");
+    loginFlash.textContent = messageFromLoginError(data);
     return;
   }
 
