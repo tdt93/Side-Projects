@@ -51,27 +51,29 @@
           </div>
 
           <div class="sidebar__controls" id="sidebarControls" hidden>
-            <p class="sidebar__section-label" data-i18n="listViewSection">List</p>
-            <div class="segmented segmented--wide" id="viewModeSeg" role="group" aria-label="List view" data-i18n-aria="listViewAria">
-              <button type="button" class="segmented__btn is-active" data-view="cases" id="viewModeCases">
-                <span data-i18n="viewActiveCases">Active cases</span>
-              </button>
-              <button type="button" class="segmented__btn" data-view="clients" id="viewModeClients">
-                <span data-i18n="viewClientList">Client list</span>
-              </button>
-            </div>
+            <div class="sidebar__toolbar-list">
+              <p class="sidebar__section-label" data-i18n="listViewSection">List</p>
+              <div class="segmented segmented--wide" id="viewModeSeg" role="group" aria-label="List view" data-i18n-aria="listViewAria">
+                <button type="button" class="segmented__btn is-active" data-view="cases" id="viewModeCases">
+                  <span data-i18n="viewActiveCases">Active cases</span>
+                </button>
+                <button type="button" class="segmented__btn" data-view="clients" id="viewModeClients">
+                  <span data-i18n="viewClientList">Client list</span>
+                </button>
+              </div>
 
-            <p class="sidebar__section-label" data-i18n="findSortLabel">Find &amp; sort</p>
-            <label class="field">
-              <span class="field__label" data-i18n="searchLabel">Search</span>
-              <input
-                type="search"
-                id="filter"
-                class="input input--sidebar"
-                placeholder=""
-                autocomplete="off"
-              />
-            </label>
+              <p class="sidebar__section-label" data-i18n="findSortLabel">Find &amp; sort</p>
+              <label class="field">
+                <span class="field__label" data-i18n="searchLabel">Search</span>
+                <input
+                  type="search"
+                  id="filter"
+                  class="input input--sidebar js-toolbar-filter"
+                  placeholder=""
+                  autocomplete="off"
+                />
+              </label>
+            </div>
             <label class="field">
               <span class="field__label" data-i18n="sortByLabel">Sort by</span>
               <select id="sortField" class="select select--sidebar"></select>
@@ -115,13 +117,7 @@
       <div class="workspace">
         <header class="topbar">
           <div class="topbar__mobile-row">
-            <button type="button" class="icon-btn" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
+            <span class="topbar__mobile-spacer" aria-hidden="true"></span>
             <a class="topbar__brand topbar__brand--mobile" href="/" aria-label="Home">
               <img
                 class="topbar__logo topbar__logo--mobile"
@@ -132,13 +128,41 @@
                 decoding="async"
               />
             </a>
-            <span class="topbar__mobile-spacer" aria-hidden="true"></span>
+            <button type="button" class="icon-btn icon-btn--menu-end" id="menuToggle" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
           </div>
           <div class="topbar__titles">
             <h1 class="page-title" id="pageTitle">Welcome</h1>
             <p class="page-subtitle" id="subtitle" aria-live="polite"></p>
           </div>
         </header>
+
+        <div class="workspace-toolbar" id="workspaceToolbar" hidden>
+          <p class="workspace-toolbar__label" data-i18n="listViewSection">List</p>
+          <div class="segmented segmented--wide segmented--light" id="viewModeSegMobile" role="group" aria-label="List view" data-i18n-aria="listViewAria">
+            <button type="button" class="segmented__btn is-active" data-view="cases" id="viewModeCasesMobile">
+              <span data-i18n="viewActiveCases">Active cases</span>
+            </button>
+            <button type="button" class="segmented__btn" data-view="clients" id="viewModeClientsMobile">
+              <span data-i18n="viewClientList">Client list</span>
+            </button>
+          </div>
+          <label class="field workspace-toolbar__search">
+            <span class="field__label workspace-toolbar__search-label" data-i18n="searchLabel">Search</span>
+            <input
+              type="search"
+              id="filterMobile"
+              class="input workspace-toolbar__input js-toolbar-filter"
+              placeholder=""
+              autocomplete="off"
+            />
+          </label>
+        </div>
 
         <main class="main" id="workspaceMain">
           <section class="login-panel" id="loginView" aria-labelledby="loginHeading">
@@ -174,6 +198,7 @@
           <section class="records-panel" id="recordsView" hidden>
             <div id="error" class="banner banner--error" role="alert" hidden></div>
             <div id="empty" class="empty-state" hidden></div>
+            <div class="card-list card-list--mobile" id="cardList" hidden aria-label="Records"></div>
             <div class="table-wrap table-wrap--animated" id="tableWrap" hidden>
               <table id="table" class="table">
                 <thead>

@@ -27,6 +27,10 @@ const sortDirEl = document.getElementById("sortDir");
 
 const viewModeCases = document.getElementById("viewModeCases");
 const viewModeClients = document.getElementById("viewModeClients");
+const viewModeCasesMobile = document.getElementById("viewModeCasesMobile");
+const viewModeClientsMobile = document.getElementById("viewModeClientsMobile");
+const filterMobile = document.getElementById("filterMobile");
+const workspaceToolbar = document.getElementById("workspaceToolbar");
 
 const prevPageBtn = document.getElementById("prevPageBtn");
 const nextPageBtn = document.getElementById("nextPageBtn");
@@ -39,8 +43,23 @@ const emptyEl = document.getElementById("empty");
 const tableWrap = document.getElementById("tableWrap");
 const theadRow = document.getElementById("theadRow");
 const tbody = document.getElementById("tbody");
+const cardList = document.getElementById("cardList");
 
 const fetchOpts = { credentials: "same-origin" };
+
+function clearRecordTableUi() {
+  tbody.innerHTML = "";
+  theadRow.innerHTML = "";
+  if (cardList) {
+    cardList.innerHTML = "";
+    cardList.hidden = true;
+  }
+}
+
+const mqlMobileLayout = window.matchMedia("(max-width: 900px)");
+function isMobileCardLayout() {
+  return mqlMobileLayout.matches;
+}
 
 /** Browser tab title (fixed branding). */
 const APP_DOC_TITLE = "A2D - Partner Relations";
@@ -93,7 +112,7 @@ const i18n = {
     pageInfoShort: "page: {page}/{pages}",
     emailLabel: "Email",
     phoneLabel: "Phone number",
-    loginHint: "Use the same email and phone number (Kontakt) as in the Partner list your administrator maintains.",
+    loginHint: "Use the same email and phone number provided to our system.",
     footerPrivacy: "Privacy policy",
     footerSupport: "Support",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -153,7 +172,7 @@ const i18n = {
     pageInfoShort: "trang: {page}/{pages}",
     emailLabel: "Email",
     phoneLabel: "Số điện thoại",
-    loginHint: "Dùng cùng email và số điện thoại (Kontakt) như trong danh sách Đối tác do quản trị viên quản lý.",
+    loginHint: "Sử dụng cùng email và số điện thoại đã cung cấp cho hệ thống của chúng tôi.",
     footerPrivacy: "Chính sách riêng tư",
     footerSupport: "Hỗ trợ",
     documentTitleGuest: "Chào mừng — A2D Solutions",
@@ -213,7 +232,7 @@ const i18n = {
     pageInfoShort: "strona: {page}/{pages}",
     emailLabel: "E-mail",
     phoneLabel: "Numer telefonu",
-    loginHint: "Użyj tego samego e-maila i numeru telefonu (Kontakt), co na liście Partnerów prowadzonej przez administratora.",
+    loginHint: "Użyj tego samego adresu e-mail i numeru telefonu, które zostały nam przekazane.",
     footerPrivacy: "Polityka prywatności",
     footerSupport: "Wsparcie",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -322,6 +341,20 @@ function columnHeader(key) {
   return t(k);
 }
 
+function fieldByKey(key) {
+  return listColumns.find((c) => c.key === key)?.airtableField;
+}
+
+function cellValueForKey(record, key) {
+  const f = fieldByKey(key);
+  if (!f) return "";
+  return formatCellValue(record.fields?.[f]);
+}
+
+function caseCardKv(key, record) {
+  return `<div class="case-card__kv"><span class="case-card__k">${escapeHtml(columnHeader(key))}</span><span class="case-card__v">${escapeHtml(cellValueForKey(record, key))}</span></div>`;
+}
+
 function populateSortFieldOptions() {
   if (!sortFieldEl) return;
   const keys = listViewMode === "cases" ? CASE_SORT_KEYS : CLIENT_SORT_KEYS;
@@ -370,6 +403,54 @@ function renderTable(pageRecords) {
   tableWrap.hidden = false;
 }
 
+function renderCaseCards(pageRecords) {
+  const html = pageRecords
+    .map((r) => {
+      const left = ["fullname", "dob", "passportNr"].map((k) => caseCardKv(k, r)).join("");
+      const caseRight = `<div class="case-card__right">
+        <span class="case-card__k">${escapeHtml(columnHeader("case"))}</span>
+        <span class="case-card__v case-card__v--case">${escapeHtml(cellValueForKey(r, "case"))}</span>
+      </div>`;
+      const g1 = caseCardKv("documentSubmittedDate", r) + caseCardKv("fingerprintDate", r);
+      const g2 = caseCardKv("decisionExpectedDate", r) + caseCardKv("collectionCardDate", r);
+      return `<article class="case-card">
+        <div class="case-card__section case-card__section--top">
+          <div class="case-card__top-grid">
+            <div class="case-card__left">${left}</div>
+            ${caseRight}
+          </div>
+        </div>
+        <div class="case-card__section case-card__section--bottom">
+          <div class="case-card__grid2">${g1}</div>
+          <div class="case-card__grid2">${g2}</div>
+        </div>
+      </article>`;
+    })
+    .join("");
+  cardList.innerHTML = html;
+  cardList.hidden = false;
+}
+
+function renderClientCards(pageRecords) {
+  const keys = ["fullname", "dob", "passportNr", "cardExpiredDate"];
+  const html = pageRecords
+    .map((r) => {
+      const top = keys.slice(0, 3).map((k) => caseCardKv(k, r)).join("");
+      const bottom = caseCardKv("cardExpiredDate", r);
+      return `<article class="case-card case-card--client">
+        <div class="case-card__section case-card__section--top">
+          <div class="case-card__client-stack">${top}</div>
+        </div>
+        <div class="case-card__section case-card__section--bottom">
+          <div class="case-card__client-wide">${bottom}</div>
+        </div>
+      </article>`;
+    })
+    .join("");
+  cardList.innerHTML = html;
+  cardList.hidden = false;
+}
+
 function setPaginationUI(totalCount) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   page = clamp(page, 1, totalPages);
@@ -386,6 +467,10 @@ function render() {
   if (!listColumns.length) {
     emptyEl.hidden = true;
     tableWrap.hidden = true;
+    if (cardList) {
+      cardList.innerHTML = "";
+      cardList.hidden = true;
+    }
     if (pager) pager.hidden = true;
     return;
   }
@@ -399,6 +484,10 @@ function render() {
     emptyEl.hidden = false;
     emptyEl.textContent = rawRecords.length ? t("noRecords") : t("noRecordsInTable");
     tableWrap.hidden = true;
+    if (cardList) {
+      cardList.innerHTML = "";
+      cardList.hidden = true;
+    }
     if (pager) pager.hidden = false;
     setPaginationUI(totalCount);
     return;
@@ -409,7 +498,19 @@ function render() {
 
   const start = (page - 1) * pageSize;
   const pageRecords = sorted.slice(start, start + pageSize);
-  renderTable(pageRecords);
+  if (isMobileCardLayout()) {
+    tableWrap.hidden = true;
+    tbody.innerHTML = "";
+    theadRow.innerHTML = "";
+    if (listViewMode === "cases") renderCaseCards(pageRecords);
+    else renderClientCards(pageRecords);
+  } else {
+    if (cardList) {
+      cardList.innerHTML = "";
+      cardList.hidden = true;
+    }
+    renderTable(pageRecords);
+  }
   if (pager) pager.hidden = false;
 }
 
@@ -444,6 +545,7 @@ function setGuestUI() {
   emptyEl.hidden = true;
 
   sidebarControls.hidden = true;
+  if (workspaceToolbar) workspaceToolbar.hidden = true;
   if (pager) pager.hidden = true;
   enforceAuthPanels(false);
 
@@ -461,8 +563,7 @@ function setGuestUI() {
   updateViewModeButtons();
   rawRecords = [];
   listColumns = [];
-  tbody.innerHTML = "";
-  theadRow.innerHTML = "";
+  clearRecordTableUi();
 }
 
 function setLoggedInUI(email) {
@@ -472,6 +573,7 @@ function setLoggedInUI(email) {
   subtitle.textContent = "";
 
   sidebarControls.hidden = false;
+  if (workspaceToolbar) workspaceToolbar.hidden = false;
   if (pager) pager.hidden = true;
   if (logoutIconWrap) logoutIconWrap.hidden = false;
 
@@ -495,6 +597,8 @@ function updateWorkspaceFooter() {
 function updateViewModeButtons() {
   viewModeCases?.classList.toggle("is-active", listViewMode === "cases");
   viewModeClients?.classList.toggle("is-active", listViewMode === "clients");
+  viewModeCasesMobile?.classList.toggle("is-active", listViewMode === "cases");
+  viewModeClientsMobile?.classList.toggle("is-active", listViewMode === "clients");
 }
 
 function setListViewMode(mode) {
@@ -542,7 +646,9 @@ function applyI18n() {
     if (key) el.setAttribute("aria-label", t(key));
   });
 
-  filterEl.placeholder = t("searchPlaceholder");
+  document.querySelectorAll(".js-toolbar-filter").forEach((el) => {
+    el.placeholder = t("searchPlaceholder");
+  });
   sortDirEl.querySelector('option[value="asc"]').textContent = t("ascending");
   sortDirEl.querySelector('option[value="desc"]').textContent = t("descending");
   sortFieldEl.ariaLabel = t("sortByLabel");
@@ -577,6 +683,7 @@ function applyServerConfig(cfg) {
 function syncClientListTab(cfg) {
   const show = Boolean(cfg?.clientListConfigured);
   if (viewModeClients) viewModeClients.hidden = !show;
+  if (viewModeClientsMobile) viewModeClientsMobile.hidden = !show;
   if (!show && listViewMode === "clients") {
     listViewMode = "cases";
     updateViewModeButtons();
@@ -639,8 +746,7 @@ async function loadRecords() {
     errorEl.hidden = false;
     errorEl.textContent = t("noPartnerFilter");
     rawRecords = [];
-    tbody.innerHTML = "";
-    theadRow.innerHTML = "";
+    clearRecordTableUi();
     tableWrap.hidden = true;
     if (pager) pager.hidden = true;
     setSubtitleLoading(false);
@@ -651,8 +757,7 @@ async function loadRecords() {
     errorEl.hidden = false;
     errorEl.textContent = t("listFieldsMissing");
     rawRecords = [];
-    tbody.innerHTML = "";
-    theadRow.innerHTML = "";
+    clearRecordTableUi();
     tableWrap.hidden = true;
     if (pager) pager.hidden = true;
     setSubtitleLoading(false);
@@ -715,8 +820,7 @@ async function loadClients() {
     errorEl.hidden = false;
     errorEl.textContent = t("noPartnerFilter");
     rawRecords = [];
-    tbody.innerHTML = "";
-    theadRow.innerHTML = "";
+    clearRecordTableUi();
     tableWrap.hidden = true;
     if (pager) pager.hidden = true;
     setSubtitleLoading(false);
@@ -727,8 +831,7 @@ async function loadClients() {
     errorEl.hidden = false;
     errorEl.textContent = t("listClientFieldsMissing");
     rawRecords = [];
-    tbody.innerHTML = "";
-    theadRow.innerHTML = "";
+    clearRecordTableUi();
     tableWrap.hidden = true;
     if (pager) pager.hidden = true;
     setSubtitleLoading(false);
@@ -805,10 +908,27 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") setSidebarOpen(false);
 });
 
-filterEl?.addEventListener("input", () => {
-  q = filterEl.value;
-  page = 1;
-  if (!recordsView.hidden) render();
+function bindToolbarFilters() {
+  document.querySelectorAll(".js-toolbar-filter").forEach((el) => {
+    el.addEventListener("input", () => {
+      q = el.value;
+      document.querySelectorAll(".js-toolbar-filter").forEach((o) => {
+        if (o !== el) o.value = el.value;
+      });
+      page = 1;
+      if (!recordsView.hidden && listColumns.length) render();
+    });
+  });
+}
+bindToolbarFilters();
+
+viewModeCasesMobile?.addEventListener("click", () => setListViewMode("cases"));
+viewModeClientsMobile?.addEventListener("click", () => setListViewMode("clients"));
+
+mqlMobileLayout.addEventListener("change", () => {
+  if (accountActionBtn?.classList.contains("pill--user") && listColumns.length && !recordsView.hidden) {
+    render();
+  }
 });
 
 sortFieldEl?.addEventListener("change", () => {
