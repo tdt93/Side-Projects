@@ -351,6 +351,10 @@ function cellValueForKey(record, key) {
   return formatCellValue(record.fields?.[f]);
 }
 
+function hasCollectionCardDate(record) {
+  return String(cellValueForKey(record, "collectionCardDate") ?? "").trim() !== "";
+}
+
 function caseCardKv(key, record) {
   return `<div class="case-card__kv"><span class="case-card__k">${escapeHtml(columnHeader(key))}</span><span class="case-card__v">${escapeHtml(cellValueForKey(record, key))}</span></div>`;
 }
@@ -396,7 +400,8 @@ function renderTable(pageRecords) {
       const val = formatCellValue(r.fields?.[c.airtableField]);
       return `<td><span class="cell-value">${escapeHtml(val)}</span></td>`;
     });
-    return `<tr class="table__row" data-row="${i}">${cells.join("")}</tr>`;
+    const rowClass = `table__row${hasCollectionCardDate(r) ? " table__row--card-ready" : ""}`;
+    return `<tr class="${rowClass}" data-row="${i}">${cells.join("")}</tr>`;
   });
 
   tbody.innerHTML = rows.join("");
@@ -413,7 +418,8 @@ function renderCaseCards(pageRecords) {
       </div>`;
       const g1 = caseCardKv("documentSubmittedDate", r) + caseCardKv("fingerprintDate", r);
       const g2 = caseCardKv("decisionExpectedDate", r) + caseCardKv("collectionCardDate", r);
-      return `<article class="case-card">
+      const cardClass = `case-card${hasCollectionCardDate(r) ? " case-card--card-ready" : ""}`;
+      return `<article class="${cardClass}">
         <div class="case-card__section case-card__section--top">
           <div class="case-card__top-grid">
             <div class="case-card__left">${left}</div>

@@ -878,6 +878,14 @@ body {
   background: #e8ecf4 !important;
 }
 
+.table tbody tr.table__row--card-ready td {
+  background: #e5f5ea !important;
+}
+
+.table tbody tr.table__row--card-ready:hover td {
+  background: #d4efd9 !important;
+}
+
 .table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -1117,6 +1125,20 @@ body {
   .case-card__section--bottom {
     background: #f4f6fa;
     border-top: 1px solid var(--border);
+  }
+
+  .case-card--card-ready {
+    border-color: #9dcbaf;
+    box-shadow: 0 4px 20px rgba(46, 125, 50, 0.12);
+  }
+
+  .case-card--card-ready .case-card__section--top {
+    background: linear-gradient(165deg, #dff5e4 0%, #cfead6 100%);
+  }
+
+  .case-card--card-ready .case-card__section--bottom {
+    background: #e5f5ea;
+    border-top-color: #b8dfc4;
   }
 
   .case-card__top-grid {
