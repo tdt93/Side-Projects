@@ -4,11 +4,11 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import session from "express-session";
-import SqliteStoreFactory from "better-sqlite3-session-store";
 import passport from "passport";
 import { fileURLToPath } from "url";
-import { db, getUserByEmail, listUsers, updateUserPartnerFilter } from "./db.js";
+import { loadAdminDb } from "./admin-db.js";
 import { checkLoginLocked, clearLoginLockout, recordLoginFailure } from "./login-lockout.js";
+import { createSessionStore } from "./session-store.js";
 
 function formatCellValueForPartner(value) {
   if (value === null || value === undefined) return "";
@@ -289,7 +289,7 @@ function requireSessionSecret() {
 
 requireSessionSecret();
 
-const SqliteSessionStore = SqliteStoreFactory(session);
+const sessionStore = await createSessionStore();
 
 passport.serializeUser((user, done) => {
   done(
@@ -342,10 +342,7 @@ async function resolvePartnerLogin(phoneNorm, password) {
 app.use(express.json());
 app.use(
   session({
-    store: new SqliteSessionStore({
-      client: db,
-      expired: { clear: true, intervalMs: 15 * 60 * 1000 },
-    }),
+    store: sessionStore,
     secret: SESSION_SECRET || "dev-insecure-change-me",
     resave: false,
     saveUninitialized: false,
@@ -447,7 +444,7 @@ app.get("/api/me", (req, res) => {
   });
 });
 
-app.get("/api/admin/users", adminRouteLimiter, (req, res) => {
+app.get("/api/admin/users", adminRouteLimiter, async (req, res) => {
   if (!ADMIN_USER_LIST_SECRET) {
     return res.status(503).json({
       error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
@@ -458,13 +455,14 @@ app.get("/api/admin/users", adminRouteLimiter, (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
   try {
+    const { listUsers } = await loadAdminDb();
     res.json({ users: listUsers() });
   } catch (e) {
     res.status(500).json({ error: e.message || "Failed to list users" });
   }
 });
 
-app.patch("/api/admin/users", adminRouteLimiter, (req, res) => {
+app.patch("/api/admin/users", adminRouteLimiter, async (req, res) => {
   if (!ADMIN_USER_LIST_SECRET) {
     return res.status(503).json({
       error: "Admin user list is disabled. Set ADMIN_USER_LIST_SECRET in .env and restart the server.",
@@ -487,6 +485,7 @@ app.patch("/api/admin/users", adminRouteLimiter, (req, res) => {
       ? null
       : String(raw).trim();
   try {
+    const { updateUserPartnerFilter, getUserByEmail } = await loadAdminDb();
     updateUserPartnerFilter(email, partner);
     const row = getUserByEmail(email);
     res.json({
