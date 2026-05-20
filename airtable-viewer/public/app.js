@@ -9,6 +9,7 @@ const logoutIconWrap = document.getElementById("logoutIconWrap");
 const langSelect = document.getElementById("langSelect");
 
 const sidebarControls = document.getElementById("sidebarControls");
+const caseColorLegend = document.getElementById("caseColorLegend");
 const workspaceMain = document.getElementById("workspaceMain");
 
 const pageTitle = document.getElementById("pageTitle");
@@ -148,6 +149,12 @@ const i18n = {
     listViewSection: "List",
     viewActiveCases: "Active cases",
     viewClientList: "Client list",
+    legendTitle: "Legend",
+    legendNewCase: "New case",
+    legendPrepSubmission: "Prep for submission",
+    legendOngoing: "Ongoing",
+    legendAppeal: "Appeal",
+    legendPositive: "Positive decision",
     documentTitleClients: "Clients — A2D Solutions",
     listClientFieldsMissing:
       "Set LIST_FIELDS",
@@ -217,6 +224,12 @@ const i18n = {
     listViewAria: "Chọn danh sách hiển thị",
     viewActiveCases: "Hồ sơ đang xử lý",
     viewClientList: "Danh sách khách hàng",
+    legendTitle: "Chú thích",
+    legendNewCase: "Hồ sơ mới",
+    legendPrepSubmission: "Chuẩn bị nộp",
+    legendOngoing: "Đang xử lý",
+    legendAppeal: "Khiếu nại",
+    legendPositive: "Quyết định tích cực",
     documentTitleClients: "Khách hàng — A2D Solutions",
     listClientFieldsMissing:
       "Đặt LIST_FIELDS",
@@ -288,6 +301,12 @@ const i18n = {
     listViewSection: "Lista",
     viewActiveCases: "Aktywne sprawy",
     viewClientList: "Lista klientów",
+    legendTitle: "Legenda",
+    legendNewCase: "Nowa sprawa",
+    legendPrepSubmission: "Przygotowanie do złożenia",
+    legendOngoing: "W toku",
+    legendAppeal: "Odwołanie",
+    legendPositive: "Decyzja pozytywna",
     documentTitleClients: "Klienci — A2D Solutions",
     listClientFieldsMissing:
       "Ustaw LIST_FIELDS",
@@ -683,10 +702,12 @@ function updateWorkspaceFooter() {
 }
 
 function updateViewModeButtons() {
-  viewModeCases?.classList.toggle("is-active", listViewMode === "cases");
+  const cases = listViewMode === "cases";
+  viewModeCases?.classList.toggle("is-active", cases);
   viewModeClients?.classList.toggle("is-active", listViewMode === "clients");
-  viewModeCasesMobile?.classList.toggle("is-active", listViewMode === "cases");
+  viewModeCasesMobile?.classList.toggle("is-active", cases);
   viewModeClientsMobile?.classList.toggle("is-active", listViewMode === "clients");
+  if (caseColorLegend) caseColorLegend.hidden = !cases;
 }
 
 function setListViewMode(mode) {
