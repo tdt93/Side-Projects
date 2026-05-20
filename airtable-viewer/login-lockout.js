@@ -7,18 +7,18 @@ const MS_24H = 24 * 60 * 60 * 1000;
 /** @type {Map<string, LockState>} */
 const loginLockState = new Map();
 
-export function loginLockoutKey(req, emailNorm) {
+export function loginLockoutKey(req, phoneNorm) {
   const ip = String(req.ip || req.socket?.remoteAddress || "unknown");
-  return `${ip}|${emailNorm}`;
+  return `${ip}|${phoneNorm}`;
 }
 
 /**
  * @param {import("express").Request} req
- * @param {string} emailNorm
+ * @param {string} phoneNorm
  * @returns {{ locked: true, lockUntil: number } | { locked: false }}
  */
-export function recordLoginFailure(req, emailNorm) {
-  const key = loginLockoutKey(req, emailNorm);
+export function recordLoginFailure(req, phoneNorm) {
+  const key = loginLockoutKey(req, phoneNorm);
   const now = Date.now();
   /** @type {LockState} */
   let st = loginLockState.get(key) || { stage: "striking", strikes: 0, lockUntil: 0 };
@@ -60,18 +60,18 @@ export function recordLoginFailure(req, emailNorm) {
 }
 
 /** @param {import("express").Request} req
- * @param {string} emailNorm */
-export function clearLoginLockout(req, emailNorm) {
-  loginLockState.delete(loginLockoutKey(req, emailNorm));
+ * @param {string} phoneNorm */
+export function clearLoginLockout(req, phoneNorm) {
+  loginLockState.delete(loginLockoutKey(req, phoneNorm));
 }
 
 /**
  * @param {import("express").Request} req
- * @param {string} emailNorm
+ * @param {string} phoneNorm
  * @returns {{ locked: true, lockUntil: number } | { locked: false }}
  */
-export function checkLoginLocked(req, emailNorm) {
-  const key = loginLockoutKey(req, emailNorm);
+export function checkLoginLocked(req, phoneNorm) {
+  const key = loginLockoutKey(req, phoneNorm);
   const st = loginLockState.get(key);
   const now = Date.now();
   if (st && now < st.lockUntil) {

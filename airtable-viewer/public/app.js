@@ -90,7 +90,7 @@ const i18n = {
     welcomeTitle: "Welcome",
     loggedInTitle: "Records",
     loginHeading: "Sign in",
-    loginLead: "Sign in with your business email and phone number.",
+    loginLead: "Sign in with your phone number and password.",
     guestSubtitle: "Please sign in to check your cases",
     loadingBase: "Loading",
     findSortLabel: "Find & sort",
@@ -110,9 +110,9 @@ const i18n = {
     listFieldsMissing:
       "Set VIEW_FIELDS",
     pageInfoShort: "page: {page}/{pages}",
-    emailLabel: "Email",
     phoneLabel: "Phone number",
-    loginHint: "Use the same email and phone number provided to our system.",
+    passwordLabel: "Password",
+    loginHint: "Use the phone number and password provided to you for this service.",
     footerPrivacy: "Privacy policy",
     footerSupport: "Support",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -123,18 +123,18 @@ const i18n = {
     errorSubtitle: "Error",
     noPartnerFilter:
       "Your partner row in Airtable is missing the partner name used for case matching. Ask your administrator to fill that field.",
-    loginEmailRequired: "Enter your email.",
     loginPhoneRequired: "Enter your phone number.",
+    loginPasswordRequired: "Enter your password.",
     loginFailed: "Sign-in failed.",
     loginErrorInvalid:
-      "Invalid email or phone number. Use the same Email and phone number provided to our service (digits only must match for the phone, with or without country code).",
+      "Invalid phone number or password. Use the number and password provided to you (phone digits must match, with or without country code).",
     loginErrorPartnerFieldEmpty:
       "Your partner record is incomplete: the partner name used to filter cases is missing. Contact your administrator.",
     loginLockedMinutes: "Too many failed attempts. Try again in about {minutes} minute(s).",
     loginLockedHours: "Too many failed attempts. Try again in about {hours} hour(s).",
     loginErrorLockedGeneric: "Too many failed attempts. Please try again later.",
     loginErrorRateLimit: "Too many login attempts. Please wait and try again.",
-    loginErrorMissingFields: "Enter your email and phone number.",
+    loginErrorMissingFields: "Enter your phone number and password.",
     loginErrorServerConfig: "The service is temporarily unavailable. Please try again later.",
     col_fullname: "Full name",
     col_dob: "Date of birth",
@@ -160,7 +160,7 @@ const i18n = {
     welcomeTitle: "Chào mừng",
     loggedInTitle: "Danh sách",
     loginHeading: "Đăng nhập",
-    loginLead: "Đăng nhập bằng email doanh nghiệp và số điện thoại.",
+    loginLead: "Đăng nhập bằng số điện thoại và mật khẩu.",
     guestSubtitle: "Vui lòng đăng nhập để kiểm tra các hồ sơ của bạn",
     loadingBase: "Đang tải",
     findSortLabel: "Tìm kiếm & sắp xếp",
@@ -180,9 +180,9 @@ const i18n = {
     listFieldsMissing:
       "Đặt VIEW_FIELDS",
     pageInfoShort: "trang: {page}/{pages}",
-    emailLabel: "Email",
     phoneLabel: "Số điện thoại",
-    loginHint: "Sử dụng cùng email và số điện thoại đã cung cấp cho hệ thống của chúng tôi.",
+    passwordLabel: "Mật khẩu",
+    loginHint: "Dùng số điện thoại và mật khẩu đã được cung cấp cho bạn.",
     footerPrivacy: "Chính sách riêng tư",
     footerSupport: "Hỗ trợ",
     documentTitleGuest: "Chào mừng — A2D Solutions",
@@ -191,18 +191,18 @@ const i18n = {
     errorSubtitle: "Lỗi",
     noPartnerFilter:
       "Dòng đối tác trên Airtable thiếu tên dùng để khớp hồ sơ. Nhờ quản trị viên điền trường đó.",
-    loginEmailRequired: "Nhập email của bạn.",
     loginPhoneRequired: "Nhập số điện thoại.",
+    loginPasswordRequired: "Nhập mật khẩu.",
     loginFailed: "Đăng nhập thất bại.",
     loginErrorInvalid:
-      "Email hoặc số điện thoại không đúng. Dùng cùng email và số điện thoại đã cung cấp cho dịch vụ của chúng tôi (chỉ cần khớp các chữ số, có hoặc không có mã quốc gia).",
+      "Số điện thoại hoặc mật khẩu không đúng. Dùng thông tin đã được cung cấp (chỉ cần khớp các chữ số của số điện thoại, có hoặc không có mã quốc gia).",
     loginErrorPartnerFieldEmpty:
       "Hồ sơ đối tác chưa đủ: thiếu tên dùng để lọc hồ sơ. Liên hệ quản trị viên.",
     loginLockedMinutes: "Quá nhiều lần thử không thành công. Thử lại sau khoảng {minutes} phút.",
     loginLockedHours: "Quá nhiều lần thử không thành công. Thử lại sau khoảng {hours} giờ.",
     loginErrorLockedGeneric: "Quá nhiều lần thử không thành công. Vui lòng thử lại sau.",
     loginErrorRateLimit: "Bạn đã đăng nhập quá nhiều lần. Vui lòng đợi rồi thử lại.",
-    loginErrorMissingFields: "Vui lòng nhập email và số điện thoại.",
+    loginErrorMissingFields: "Vui lòng nhập số điện thoại và mật khẩu.",
     loginErrorServerConfig: "Dịch vụ tạm thời không khả dụng. Vui lòng thử lại sau.",
     col_fullname: "Họ và tên",
     col_dob: "Ngày sinh",
@@ -230,7 +230,7 @@ const i18n = {
     welcomeTitle: "Witamy",
     loggedInTitle: "Rekordy",
     loginHeading: "Zaloguj się",
-    loginLead: "Zaloguj się firmowym adresem e-mail i numerem telefonu.",
+    loginLead: "Zaloguj się numerem telefonu i hasłem.",
     guestSubtitle: "Zaloguj się, aby sprawdzić swoje sprawy",
     loadingBase: "Ładowanie",
     findSortLabel: "Szukaj i sortuj",
@@ -250,9 +250,9 @@ const i18n = {
     listFieldsMissing:
       "Ustaw VIEW_FIELDS",
     pageInfoShort: "strona: {page}/{pages}",
-    emailLabel: "E-mail",
     phoneLabel: "Numer telefonu",
-    loginHint: "Użyj tego samego adresu e-mail i numeru telefonu, które zostały nam przekazane.",
+    passwordLabel: "Hasło",
+    loginHint: "Użyj numeru telefonu i hasła przekazanych dla tej usługi.",
     footerPrivacy: "Polityka prywatności",
     footerSupport: "Wsparcie",
     footerCopyright: "Copyright A2D SOLUTIONS © {year}",
@@ -263,18 +263,18 @@ const i18n = {
     errorSubtitle: "Błąd",
     noPartnerFilter:
       "W wierszu partnera w Airtable brakuje nazwy używanej do dopasowania spraw. Poproś administratora o uzupełnienie tego pola.",
-    loginEmailRequired: "Podaj adres e-mail.",
     loginPhoneRequired: "Podaj numer telefonu.",
+    loginPasswordRequired: "Podaj hasło.",
     loginFailed: "Logowanie nie powiodło się.",
     loginErrorInvalid:
-      "Nieprawidłowy adres e-mail lub numer telefonu. Użyj tego samego e-maila i numeru telefonu, które przekazaliście naszej obsłudze (wystarczy zgodność cyfr, z numerem kierunkowym kraju lub bez).",
+      "Nieprawidłowy numer telefonu lub hasło. Użyj danych przekazanych dla tej usługi (wystarczy zgodność cyfr numeru, z numerem kierunkowym kraju lub bez).",
     loginErrorPartnerFieldEmpty:
       "Profil partnera jest niepełny: brakuje nazwy używanej do filtrowania spraw. Skontaktuj się z administratorem.",
     loginLockedMinutes: "Zbyt wiele nieudanych prób. Spróbuj ponownie za około {minutes} min.",
     loginLockedHours: "Zbyt wiele nieudanych prób. Spróbuj ponownie za około {hours} godz.",
     loginErrorLockedGeneric: "Zbyt wiele nieudanych prób. Spróbuj ponownie później.",
     loginErrorRateLimit: "Zbyt wiele prób logowania. Odczekaj chwilę i spróbuj ponownie.",
-    loginErrorMissingFields: "Podaj adres e-mail i numer telefonu.",
+    loginErrorMissingFields: "Podaj numer telefonu i hasło.",
     loginErrorServerConfig: "Usługa jest tymczasowo niedostępna. Spróbuj ponownie później.",
     col_fullname: "Imię i nazwisko",
     col_dob: "Data urodzenia",
@@ -413,8 +413,26 @@ function cellValueForKey(record, key) {
   return formatCellValue(record.fields?.[f]);
 }
 
-function hasCollectionCardDate(record) {
-  return String(cellValueForKey(record, "collectionCardDate") ?? "").trim() !== "";
+/** @param {{ checklistCode?: string }} record */
+function checklistStyleSuffix(record) {
+  const code = String(record.checklistCode || "").toUpperCase();
+  switch (code) {
+    case "A1":
+      return "chk-a1";
+    case "A2":
+      return "chk-a2";
+    case "A3":
+    case "INNE":
+    case "A4":
+      return "chk-a34";
+    case "UDSC":
+    case "WSA":
+      return "chk-udsc-wsa";
+    case "A5":
+      return "chk-a5";
+    default:
+      return "";
+  }
 }
 
 function caseCardKv(key, record) {
@@ -462,7 +480,8 @@ function renderTable(pageRecords) {
       const val = formatCellValue(r.fields?.[c.airtableField]);
       return `<td><span class="cell-value">${escapeHtml(val)}</span></td>`;
     });
-    const rowClass = `table__row${hasCollectionCardDate(r) ? " table__row--card-ready" : ""}`;
+    const chk = checklistStyleSuffix(r);
+    const rowClass = chk ? `table__row table__row--${chk}` : "table__row";
     return `<tr class="${rowClass}" data-row="${i}">${cells.join("")}</tr>`;
   });
 
@@ -480,7 +499,8 @@ function renderCaseCards(pageRecords) {
       </div>`;
       const g1 = caseCardKv("documentSubmittedDate", r) + caseCardKv("fingerprintDate", r);
       const g2 = caseCardKv("decisionExpectedDate", r) + caseCardKv("collectionCardDate", r);
-      const cardClass = `case-card${hasCollectionCardDate(r) ? " case-card--card-ready" : ""}`;
+      const chk = checklistStyleSuffix(r);
+      const cardClass = chk ? `case-card case-card--${chk}` : "case-card";
       return `<article class="${cardClass}">
         <div class="case-card__section case-card__section--top">
           <div class="case-card__top-grid">
@@ -634,7 +654,7 @@ function setGuestUI() {
   clearRecordTableUi();
 }
 
-function setLoggedInUI(email) {
+function setLoggedInUI(phone) {
   pageTitle.textContent = t("loggedInTitle");
   enforceAuthPanels(true);
   subtitle.hidden = true;
@@ -645,7 +665,7 @@ function setLoggedInUI(email) {
   if (pager) pager.hidden = true;
   if (logoutIconWrap) logoutIconWrap.hidden = false;
 
-  accountActionText.textContent = email;
+  accountActionText.textContent = phone;
   accountActionBtn.classList.remove("pill--accent");
   accountActionBtn.classList.add("pill--user");
   updateViewModeButtons();
@@ -924,9 +944,9 @@ async function bootstrapSession() {
 
   if (meRes.ok) {
     const data = await meRes.json();
-    const email = data.user?.email;
-    if (email) {
-      setLoggedInUI(email);
+    const phone = data.user?.phone;
+    if (phone) {
+      setLoggedInUI(phone);
       await loadRecords();
       return;
     }
@@ -1031,17 +1051,17 @@ loginForm?.addEventListener("submit", async (e) => {
   loginFlash.hidden = true;
 
   const fd = new FormData(loginForm);
-  const email = String(fd.get("email") || "").trim();
   const phone = String(fd.get("phone") || "").trim();
+  const password = String(fd.get("password") || "");
 
-  if (!email) {
-    loginFlash.hidden = false;
-    loginFlash.textContent = t("loginEmailRequired");
-    return;
-  }
   if (!phone) {
     loginFlash.hidden = false;
     loginFlash.textContent = t("loginPhoneRequired");
+    return;
+  }
+  if (!password) {
+    loginFlash.hidden = false;
+    loginFlash.textContent = t("loginPasswordRequired");
     return;
   }
 
@@ -1049,7 +1069,7 @@ loginForm?.addEventListener("submit", async (e) => {
     ...fetchOpts,
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, phone }),
+    body: JSON.stringify({ phone, password }),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -1062,7 +1082,7 @@ loginForm?.addEventListener("submit", async (e) => {
   const cfgRes = await fetch("/api/config", fetchOpts).then((r) => r.json());
   applyServerConfig(cfgRes);
 
-  setLoggedInUI(data.user.email);
+  setLoggedInUI(data.user.phone);
   await loadRecords();
   setSidebarOpen(false);
 });

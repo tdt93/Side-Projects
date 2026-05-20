@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #1e293b;
+  --brand: #37b3d6;
+  --brand-light: #e8f8fc;
+  --therapist-tile: #f3fafc;
+  --muted: #64748b;
+  --card: #f8fafc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-light);
+  --font-sans: var(--font-poppins), system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+::selection {
+  background: #37b3d6;
+  color: #ffffff;
+}
+
+.prose-section a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.prose-section a:hover {
+  opacity: 0.88;
+}
+
+.therapist-tile {
+  background: var(--therapist-tile);
+}
+
+@keyframes fadeout {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  10%,
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}

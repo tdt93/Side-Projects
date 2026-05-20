@@ -168,23 +168,29 @@
           <section class="login-panel" id="loginView" aria-labelledby="loginHeading">
             <div class="card card--login">
               <h2 class="card__title" id="loginHeading" data-i18n="loginHeading">Sign in</h2>
-              <p class="card__lead" data-i18n="loginLead">Sign in with your business email and phone number.</p>
+              <p class="card__lead" data-i18n="loginLead">Sign in with your phone number and password.</p>
 
               <div id="loginFlash" class="flash" role="alert" hidden></div>
 
               <form id="loginForm" class="form" novalidate>
-                <label class="field field--login">
-                  <span class="field__label" data-i18n="emailLabel">Email</span>
-                  <input type="email" name="email" class="input input--light" autocomplete="username" required />
-                </label>
                 <label class="field field--login">
                   <span class="field__label" data-i18n="phoneLabel">Phone number</span>
                   <input
                     type="tel"
                     name="phone"
                     class="input input--light"
-                    autocomplete="tel"
+                    autocomplete="username"
                     inputmode="tel"
+                    required
+                  />
+                </label>
+                <label class="field field--login">
+                  <span class="field__label" data-i18n="passwordLabel">Password</span>
+                  <input
+                    type="password"
+                    name="password"
+                    class="input input--light"
+                    autocomplete="current-password"
                     required
                   />
                 </label>

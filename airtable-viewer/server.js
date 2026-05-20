@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import dotenv from "dotenv";
 import express from "express";
 import rateLimit from "express-rate-limit";
@@ -74,8 +75,8 @@ const TABLE = stripEnvQuotes(process.env.AIRTABLE_TABLE_NAME);
 const SESSION_SECRET = process.env.SESSION_SECRET;
 
 const PARTNERS_TABLE = stripEnvQuotes(process.env.AIRTABLE_PARTNERS_TABLE || "");
-const PARTNER_EMAIL_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_EMAIL_FIELD || "Email");
 const PARTNER_PHONE_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_PHONE_FIELD || "Kontakt");
+const PARTNER_PASSWORD_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_PASSWORD_FIELD || "PWD");
 /** Value must match rows' partner field on Sprawy / Klienty (same as AIRTABLE_PARTNER_GROUP_FIELD labels). */
 const PARTNER_LABEL_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_LABEL_FIELD || "Partner");
 
@@ -137,6 +138,16 @@ function parseClientListColumns() {
 
 const PARTNER_GROUP_FIELD =
   process.env.AIRTABLE_PARTNER_GROUP_FIELD?.trim() || "PARTNER (from Klienty)";
+
+/** On Sprawy: only rows whose CHECKLIST is one of the allowed codes are returned for active cases. */
+const CASES_CHECKLIST_FIELD = stripEnvQuotes(process.env.AIRTABLE_CASES_CHECKLIST_FIELD || "CHECKLIST");
+
+const CASES_CHECKLIST_ALLOWED = new Set(
+  stripEnvQuotes(process.env.AIRTABLE_CASES_CHECKLIST_VALUES || "A1,A2,A3,A4,INNE,UDSC,WSA,A5")
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean)
+);
 
 /** Field on table Klienty that stores partner (often "PARTNER" — not the linked label on Sprawy). */
 const CLIENTS_PARTNER_FIELD =
@@ -201,14 +212,23 @@ function requireEnv() {
   return missing;
 }
 
-function normalizeEmailLogin(s) {
-  return String(s ?? "")
-    .trim()
-    .toLowerCase();
-}
-
 function normalizePhoneLogin(s) {
   return String(s ?? "").replace(/\D/g, "");
+}
+
+function normalizePasswordInput(s) {
+  return String(s ?? "").trim();
+}
+
+/** Constant-time compare for passwords stored in Airtable (plain text in PWD column). */
+function passwordsMatch(stored, provided) {
+  const a = normalizePasswordInput(stored);
+  const b = normalizePasswordInput(provided);
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
 }
 
 /** Airtable field names in API responses are usually exact, but casing can differ from .env — resolve case-insensitively. */
@@ -220,15 +240,6 @@ function getFieldCI(fields, wanted) {
     if (k.toLowerCase() === w) return fields[k];
   }
   return undefined;
-}
-
-function cellEmailString(raw) {
-  if (raw == null || raw === "") return "";
-  if (typeof raw === "string") return raw.trim();
-  if (typeof raw === "object" && raw !== null && "email" in raw) {
-    return String(/** @type {{ email?: string }} */ (raw).email ?? "").trim();
-  }
-  return String(formatCellValueForPartner(raw)).trim();
 }
 
 /** Same digits, or same national number with optional country prefix (e.g. 48… vs no prefix). */
@@ -249,6 +260,26 @@ function partnerFieldFromRecord(rec, fieldName) {
   return formatCellValueForPartner(raw);
 }
 
+function normalizeChecklistCode(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return "";
+  const upper = text.toUpperCase();
+  if (CASES_CHECKLIST_ALLOWED.has(upper)) return upper;
+  for (const part of upper.split(/[,;/|]/)) {
+    const p = part.trim();
+    if (CASES_CHECKLIST_ALLOWED.has(p)) return p;
+  }
+  return "";
+}
+
+function checklistCodeFromRecord(record) {
+  return normalizeChecklistCode(partnerFieldFromRecord(record, CASES_CHECKLIST_FIELD));
+}
+
+function recordMatchesCasesChecklist(record) {
+  return checklistCodeFromRecord(record) !== "";
+}
+
 function requireSessionSecret() {
   if (process.env.NODE_ENV === "production" && !SESSION_SECRET) {
     console.error("Set SESSION_SECRET in production.");
@@ -263,15 +294,21 @@ const SqliteSessionStore = SqliteStoreFactory(session);
 passport.serializeUser((user, done) => {
   done(
     null,
-    JSON.stringify({ email: user.email, partnerFilter: user.partnerFilter })
+    JSON.stringify({ phone: user.phone, partnerFilter: user.partnerFilter })
   );
 });
 
 passport.deserializeUser((serialized, done) => {
   try {
     const u = JSON.parse(String(serialized));
-    if (u && typeof u.email === "string" && typeof u.partnerFilter === "string" && u.partnerFilter) {
-      return done(null, { email: u.email, partnerFilter: u.partnerFilter });
+    const phone =
+      typeof u?.phone === "string"
+        ? u.phone
+        : typeof u?.email === "string"
+          ? u.email
+          : "";
+    if (phone && typeof u.partnerFilter === "string" && u.partnerFilter) {
+      return done(null, { phone, partnerFilter: u.partnerFilter });
     }
   } catch {
     /* ignore */
@@ -280,20 +317,21 @@ passport.deserializeUser((serialized, done) => {
 });
 
 /**
- * @param {string} emailNorm
  * @param {string} phoneNorm
- * @returns {Promise<{ ok: true, partnerFilter: string } | { ok: false, code: "no_match" | "empty_partner_field" }>}
+ * @param {string} password
+ * @returns {Promise<{ ok: true, partnerFilter: string, phoneDisplay: string } | { ok: false, code: "no_match" | "empty_partner_field" }>}
  */
-async function resolvePartnerLogin(emailNorm, phoneNorm) {
-  if (!emailNorm || !phoneNorm) return { ok: false, code: "no_match" };
+async function resolvePartnerLogin(phoneNorm, password) {
+  if (!phoneNorm || !password) return { ok: false, code: "no_match" };
   const records = await fetchAllRecordsFromTable(PARTNERS_TABLE);
   let matchedEmptyLabel = false;
   for (const rec of records) {
-    const em = normalizeEmailLogin(cellEmailString(getFieldCI(rec?.fields || {}, PARTNER_EMAIL_FIELD)));
-    const ph = normalizePhoneLogin(partnerFieldFromRecord(rec, PARTNER_PHONE_FIELD));
-    if (em === emailNorm && phonesMatchDigits(ph, phoneNorm)) {
+    const phStored = normalizePhoneLogin(partnerFieldFromRecord(rec, PARTNER_PHONE_FIELD));
+    const pwdStored = partnerFieldFromRecord(rec, PARTNER_PASSWORD_FIELD);
+    if (phonesMatchDigits(phStored, phoneNorm) && passwordsMatch(pwdStored, password)) {
       const label = partnerFieldFromRecord(rec, PARTNER_LABEL_FIELD).trim();
-      if (label) return { ok: true, partnerFilter: label };
+      const phoneDisplay = partnerFieldFromRecord(rec, PARTNER_PHONE_FIELD).trim() || phoneNorm;
+      if (label) return { ok: true, partnerFilter: label, phoneDisplay };
       matchedEmptyLabel = true;
     }
   }
@@ -382,6 +420,7 @@ app.get("/api/config", (_req, res) => {
     airtableConfigured: airtableMissing.length === 0,
     partnerGroupField: PARTNER_GROUP_FIELD,
     listViewColumns: parseListViewColumns(),
+    casesChecklistField: CASES_CHECKLIST_FIELD,
     clientListColumns: clientCols,
     clientsTable: CLIENTS_TABLE,
     clientListConfigured: airtableMissing.length === 0 && clientCols.length === CLIENT_LIST_KEYS.length,
@@ -399,11 +438,12 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/me", (req, res) => {
   res.set("Cache-Control", "no-store");
-  if (!req.user?.email) {
+  const phone = req.user?.phone;
+  if (!phone) {
     return res.status(200).json({ user: null });
   }
   res.status(200).json({
-    user: { email: req.user.email, partnerFilter: req.user.partnerFilter },
+    user: { phone, partnerFilter: req.user.partnerFilter },
   });
 });
 
@@ -468,19 +508,18 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
     });
   }
 
-  const emailRaw = String(req.body?.email || "").trim();
   const phoneRaw = String(req.body?.phone || "").trim();
-  const emailNorm = normalizeEmailLogin(emailRaw);
+  const password = normalizePasswordInput(req.body?.password);
   const phoneNorm = normalizePhoneLogin(phoneRaw);
 
-  if (!emailNorm || !phoneNorm) {
+  if (!phoneNorm || !password) {
     return res.status(400).json({
       errorCode: "LOGIN_MISSING_FIELDS",
-      error: "Email and phone number are required.",
+      error: "Phone number and password are required.",
     });
   }
 
-  const locked = checkLoginLocked(req, emailNorm);
+  const locked = checkLoginLocked(req, phoneNorm);
   if (locked.locked) {
     const retryAfterSec = Math.max(1, Math.ceil((locked.lockUntil - Date.now()) / 1000));
     res.set("Retry-After", String(retryAfterSec));
@@ -492,7 +531,7 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
   }
 
   try {
-    const resolved = await resolvePartnerLogin(emailNorm, phoneNorm);
+    const resolved = await resolvePartnerLogin(phoneNorm, password);
     if (!resolved.ok) {
       if (resolved.code === "empty_partner_field") {
         return res.status(403).json({
@@ -500,7 +539,7 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
           error: "Partner profile incomplete.",
         });
       }
-      const outcome = recordLoginFailure(req, emailNorm);
+      const outcome = recordLoginFailure(req, phoneNorm);
       if (outcome.locked) {
         const retryAfterSec = Math.max(1, Math.ceil((outcome.lockUntil - Date.now()) / 1000));
         res.set("Retry-After", String(retryAfterSec));
@@ -516,14 +555,14 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
       });
     }
 
-    const { partnerFilter } = resolved;
-    clearLoginLockout(req, emailNorm);
-    const user = { email: emailNorm, partnerFilter };
+    const { partnerFilter, phoneDisplay } = resolved;
+    clearLoginLockout(req, phoneNorm);
+    const user = { phone: phoneDisplay, partnerFilter };
     req.logIn(user, (e) => {
       if (e) return next(e);
       req.session.save((saveErr) => {
         if (saveErr) return next(saveErr);
-        res.json({ user: { email: user.email } });
+        res.json({ user: { phone: user.phone } });
       });
     });
   } catch (e) {
@@ -561,17 +600,21 @@ app.get("/api/records", requireAuth, async (req, res) => {
 
     const expectedN = normalizePartnerCompare(expected);
     const all = await getCachedTableRecords(TABLE);
-    const records = all.filter((r) => {
-      const v = partnerValueFromRecord(r, PARTNER_GROUP_FIELD).trim();
-      if (!v) return false;
-      if (v.toUpperCase() === "BRAK") return false;
-      return normalizePartnerCompare(v) === expectedN;
-    });
+    const records = all
+      .filter((r) => {
+        const v = partnerValueFromRecord(r, PARTNER_GROUP_FIELD).trim();
+        if (!v) return false;
+        if (v.toUpperCase() === "BRAK") return false;
+        return normalizePartnerCompare(v) === expectedN;
+      })
+      .filter(recordMatchesCasesChecklist)
+      .map((r) => ({ ...r, checklistCode: checklistCodeFromRecord(r) }));
 
     res.json({
       records,
       listViewColumns: parseListViewColumns(),
       partnerGroupField: PARTNER_GROUP_FIELD,
+      casesChecklistField: CASES_CHECKLIST_FIELD,
     });
   } catch (e) {
     const status = e.status && e.status >= 400 && e.status < 600 ? e.status : 500;
