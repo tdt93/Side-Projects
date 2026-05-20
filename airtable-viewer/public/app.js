@@ -645,6 +645,12 @@ function enforceAuthPanels(isAuthed) {
   }
 }
 
+function accountDisplayName(user) {
+  const partner = String(user?.partnerFilter ?? "").trim();
+  if (partner) return partner;
+  return String(user?.phone ?? "").trim();
+}
+
 function setGuestUI() {
   pageTitle.textContent = t("welcomeTitle");
   loginHeading.textContent = t("loginHeading");
@@ -652,11 +658,13 @@ function setGuestUI() {
   emptyEl.hidden = true;
 
   sidebarControls.hidden = true;
+  if (caseColorLegend) caseColorLegend.hidden = true;
   if (workspaceToolbar) workspaceToolbar.hidden = true;
   if (pager) pager.hidden = true;
   enforceAuthPanels(false);
 
   accountActionText.textContent = t("signInLabel");
+  accountActionBtn.removeAttribute("title");
   accountActionBtn.classList.remove("pill--user");
   accountActionBtn.classList.add("pill--accent");
   if (logoutIconWrap) logoutIconWrap.hidden = true;
@@ -673,7 +681,8 @@ function setGuestUI() {
   clearRecordTableUi();
 }
 
-function setLoggedInUI(phone) {
+/** @param {{ phone?: string, partnerFilter?: string }} user */
+function setLoggedInUI(user) {
   pageTitle.textContent = t("loggedInTitle");
   enforceAuthPanels(true);
   subtitle.hidden = true;
@@ -684,7 +693,9 @@ function setLoggedInUI(phone) {
   if (pager) pager.hidden = true;
   if (logoutIconWrap) logoutIconWrap.hidden = false;
 
-  accountActionText.textContent = phone;
+  const displayName = accountDisplayName(user);
+  accountActionText.textContent = displayName;
+  accountActionBtn.title = displayName;
   accountActionBtn.classList.remove("pill--accent");
   accountActionBtn.classList.add("pill--user");
   updateViewModeButtons();
@@ -703,11 +714,12 @@ function updateWorkspaceFooter() {
 
 function updateViewModeButtons() {
   const cases = listViewMode === "cases";
+  const loggedIn = accountActionBtn?.classList.contains("pill--user");
   viewModeCases?.classList.toggle("is-active", cases);
   viewModeClients?.classList.toggle("is-active", listViewMode === "clients");
   viewModeCasesMobile?.classList.toggle("is-active", cases);
   viewModeClientsMobile?.classList.toggle("is-active", listViewMode === "clients");
-  if (caseColorLegend) caseColorLegend.hidden = !cases;
+  if (caseColorLegend) caseColorLegend.hidden = !loggedIn || !cases;
 }
 
 function setListViewMode(mode) {
@@ -965,9 +977,9 @@ async function bootstrapSession() {
 
   if (meRes.ok) {
     const data = await meRes.json();
-    const phone = data.user?.phone;
-    if (phone) {
-      setLoggedInUI(phone);
+    const user = data.user;
+    if (user?.phone) {
+      setLoggedInUI(user);
       await loadRecords();
       return;
     }
@@ -1103,7 +1115,7 @@ loginForm?.addEventListener("submit", async (e) => {
   const cfgRes = await fetch("/api/config", fetchOpts).then((r) => r.json());
   applyServerConfig(cfgRes);
 
-  setLoggedInUI(data.user.phone);
+  setLoggedInUI(data.user);
   await loadRecords();
   setSidebarOpen(false);
 });

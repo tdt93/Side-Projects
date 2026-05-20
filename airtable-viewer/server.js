@@ -561,7 +561,7 @@ app.post("/api/login", loginLimiter, async (req, res, next) => {
       if (e) return next(e);
       req.session.save((saveErr) => {
         if (saveErr) return next(saveErr);
-        res.json({ user: { phone: user.phone } });
+        res.json({ user: { phone: user.phone, partnerFilter: user.partnerFilter } });
       });
     });
   } catch (e) {
