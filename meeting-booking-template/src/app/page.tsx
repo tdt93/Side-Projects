@@ -4,10 +4,8 @@ import { PublicFooter } from "@/components/PublicFooter";
 import { PublicNav } from "@/components/PublicNav";
 import { TherapistCard } from "@/components/TherapistCard";
 import { TherapistListPagination } from "@/components/TherapistListPagination";
-import { WhyTrzymsieSection } from "@/components/WhyTrzymsieSection";
 import { prisma } from "@/lib/db";
 import { footerCompanyFromSettings } from "@/lib/public-footer";
-import { sitePublicContentFromSettings } from "@/lib/site-public-content";
 
 const PAGE_SIZE = 10;
 
@@ -28,7 +26,6 @@ export default async function Home({
     }));
 
   const footerCompany = footerCompanyFromSettings(settings);
-  const siteContent = sitePublicContentFromSettings(settings);
 
   const where = city ? { officeCity: city } : undefined;
 
@@ -100,11 +97,6 @@ export default async function Home({
             city={city}
           />
         </section>
-
-        <WhyTrzymsieSection
-          title={siteContent.whyTrzymsie.title}
-          benefits={siteContent.whyTrzymsie.benefits}
-        />
       </main>
       <PublicFooter company={footerCompany} />
     </>

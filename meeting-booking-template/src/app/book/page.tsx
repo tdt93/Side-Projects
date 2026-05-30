@@ -8,6 +8,7 @@ import { PaymentPolicy } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { formatPlnFromGrosze, resolveSessionPricePlnGrosze } from "@/lib/p24";
 import { footerCompanyFromSettings } from "@/lib/public-footer";
+import { therapistPublicPath } from "@/lib/therapist-path";
 
 export default async function BookPage({
   searchParams,
@@ -60,7 +61,7 @@ export default async function BookPage({
         <section className="w-full bg-[#E4F4F8] py-10 md:py-14">
           <div className="mx-auto max-w-3xl px-4">
             <Link
-              href={`/t/${slug}`}
+              href={therapistPublicPath({ city: profile.officeCity })}
               className="inline-flex text-sm font-semibold text-[#37B3D6] decoration-[#37B3D6]/40 underline-offset-2 hover:underline"
             >
               ← Wróć do profilu

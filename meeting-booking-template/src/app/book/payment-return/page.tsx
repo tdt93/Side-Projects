@@ -5,6 +5,7 @@ import { PublicNav } from "@/components/PublicNav";
 import { prisma } from "@/lib/db";
 import { footerCompanyFromSettings } from "@/lib/public-footer";
 import { reconcileP24BookingPayment } from "@/lib/booking-p24-sync";
+import { therapistPublicPath } from "@/lib/therapist-path";
 
 export default async function BookPaymentReturnPage({
   searchParams,
@@ -54,6 +55,11 @@ export default async function BookPaymentReturnPage({
     redirect(`/book/confirmed?bookingId=${encodeURIComponent(bid)}`);
   }
 
+  const profile = await prisma.therapistProfile.findUnique({
+    where: { slug },
+    select: { officeCity: true },
+  });
+
   return (
     <>
       <PublicNav siteName={settings.siteName} />
@@ -63,7 +69,7 @@ export default async function BookPaymentReturnPage({
           Jeśli płatność się powiodła, za chwilę otrzymasz e-mail z potwierdzeniem.
         </p>
         <Link
-          href={`/t/${encodeURIComponent(slug)}`}
+          href={therapistPublicPath({ city: profile?.officeCity })}
           className="mt-6 inline-block text-sm font-medium text-[#37B3D6] hover:underline"
         >
           Wróć do profilu

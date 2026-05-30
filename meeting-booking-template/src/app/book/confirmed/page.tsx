@@ -7,6 +7,7 @@ import { BookingStatus } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { footerCompanyFromSettings } from "@/lib/public-footer";
 import { reconcileP24BookingPayment } from "@/lib/booking-p24-sync";
+import { therapistPublicPath } from "@/lib/therapist-path";
 
 export default async function BookConfirmedPage({
   searchParams,
@@ -93,7 +94,7 @@ export default async function BookConfirmedPage({
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <Link
-              href={`/t/${encodeURIComponent(booking.profile.slug)}`}
+              href={therapistPublicPath({ city: booking.profile.officeCity })}
               className="inline-flex justify-center rounded-lg bg-[#37B3D6] px-5 py-3 text-sm font-medium text-white hover:brightness-95"
             >
               Wróć do profilu terapeuty

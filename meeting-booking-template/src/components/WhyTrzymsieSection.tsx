@@ -13,7 +13,7 @@ export function WhyTrzymsieSection({
   return (
     <section className="w-full bg-[#E4F4F8] py-12 md:py-16">
       <div className="mx-auto max-w-6xl px-4">
-        <h2 className="mb-10 text-center text-2xl font-bold text-[#003C79] md:text-3xl">
+        <h2 className="mb-10 text-left text-2xl font-bold text-[#003C79] md:text-3xl">
           {title}
         </h2>
         <ul className="grid gap-4 sm:grid-cols-2">

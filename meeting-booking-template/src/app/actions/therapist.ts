@@ -9,6 +9,16 @@ import {
 } from "@/lib/site-public-content";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { therapistRevalidatePaths } from "@/lib/therapist-path";
+
+function revalidateTherapistPublicPages(profile: {
+  officeCity: string | null;
+  slug: string;
+}) {
+  for (const path of therapistRevalidatePaths(profile)) {
+    revalidatePath(path);
+  }
+}
 
 async function assertSuper() {
   const s = await getSession();
@@ -156,7 +166,10 @@ export async function updateTherapistProfileAction(
 
   revalidatePath("/");
   revalidatePath("/admin/therapists");
-  revalidatePath(`/t/${slug}`);
+  revalidateTherapistPublicPages({
+    slug,
+    officeCity: String(form.get("officeCity") ?? "") || null,
+  });
 }
 
 function positiveIntFromForm(value: FormDataEntryValue | null, fallback: number) {
@@ -218,9 +231,11 @@ export async function updateSiteSettingsAction(form: FormData) {
   revalidatePath("/admin/site");
   revalidatePath("/book");
 
-  const therapists = await prisma.therapistProfile.findMany({ select: { slug: true } });
-  for (const { slug } of therapists) {
-    revalidatePath(`/t/${slug}`);
+  const therapists = await prisma.therapistProfile.findMany({
+    select: { slug: true, officeCity: true },
+  });
+  for (const profile of therapists) {
+    revalidateTherapistPublicPages(profile);
   }
 }
 
@@ -273,18 +288,19 @@ export async function createTherapistAction(form: FormData) {
 
   revalidatePath("/");
   revalidatePath("/admin/therapists");
+  revalidateTherapistPublicPages({ slug, officeCity });
 }
 
 export async function deleteTherapistAction(profileId: string) {
   await assertSuper();
   const profile = await prisma.therapistProfile.findUnique({
     where: { id: profileId },
-    select: { slug: true },
+    select: { slug: true, officeCity: true },
   });
   if (!profile) return;
 
   await prisma.therapistProfile.delete({ where: { id: profileId } });
   revalidatePath("/");
   revalidatePath("/admin/therapists");
-  revalidatePath(`/t/${profile.slug}`);
+  revalidateTherapistPublicPages(profile);
 }

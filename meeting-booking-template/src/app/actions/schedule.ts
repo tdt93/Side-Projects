@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { therapistRevalidatePaths } from "@/lib/therapist-path";
 
 export async function replaceAvailabilityRulesAction(
   profileId: string,
@@ -32,11 +33,15 @@ export async function replaceAvailabilityRulesAction(
     }),
   ]);
 
-  const slug = await prisma.therapistProfile.findUnique({
+  const profile = await prisma.therapistProfile.findUnique({
     where: { id: profileId },
-    select: { slug: true },
+    select: { slug: true, officeCity: true },
   });
-  if (slug) revalidatePath(`/t/${slug.slug}`);
+  if (profile) {
+    for (const path of therapistRevalidatePaths(profile)) {
+      revalidatePath(path);
+    }
+  }
   revalidatePath("/admin/schedule");
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { therapistPublicPath } from "@/lib/therapist-path";
 
 export function TherapistCard({
   slug,
@@ -19,7 +20,7 @@ export function TherapistCard({
 }) {
   return (
     <Link
-      href={`/t/${slug}`}
+      href={therapistPublicPath({ city: officeCity })}
       className="therapist-tile group flex flex-col gap-3 rounded-xl border border-slate-200 p-4 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#37B3D6] hover:shadow-md"
     >
       <div className="flex gap-4">

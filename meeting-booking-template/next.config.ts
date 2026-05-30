@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
+    "gabinety.trzymsie.pl",
     "trzymsiedemo.tdtdev.net",
     "*.trycloudflare.com",
     "localhost",
