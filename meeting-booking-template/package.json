@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build --turbopack",
+    "build:webpack": "next build --webpack",
+    "build:hosting": "node scripts/build-hosting.js",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "node scripts/postinstall-prisma.js",
