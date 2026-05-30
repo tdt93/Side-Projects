@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum StaffRole {
+  OWNER
+  KITCHEN
+  CASHIER
+}
+
+enum OrderStatus {
+  PENDING
+  COOKING
+  READY
+  SERVED
+  PAID
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+}
+
+enum OrderSource {
+  DINE_IN
+  ONLINE
+  QR_MENU
+}
+
+model Tenant {
+  id                 String             @id @default(cuid())
+  slug               String             @unique
+  displayName        String
+  logoUrl            String?
+  primaryColor       String             @default("#C4622D")
+  accentColor        String             @default("#F59E0B")
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  subscriptionEndsAt DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  users          User[]
+  settings       RestaurantSettings?
+  locations      Location[]
+  menuCategories MenuCategory[]
+  menuItems      MenuItem[]
+  tables         Table[]
+  orders         Order[]
+  customers      Customer[]
+  inventoryItems InventoryItem[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  name         String
+  role         StaffRole
+  pinHash      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, email])
+}
+
+model RestaurantSettings {
+  id               String @id @default(cuid())
+  tenantId         String @unique
+  tenant           Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  currency         String @default("PLN")
+  taxRateBps       Int    @default(800)
+  enabledLanguages String @default("[\"vi\",\"en\",\"pl\"]")
+  defaultLocale    String @default("vi")
+  themeMode        String @default("light")
+  menuMode         String @default("mixed")
+}
+
+model Location {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  address   String
+  phone     String
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MenuCategory {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+}
+
+model MenuItem {
+  id               String       @id @default(cuid())
+  tenantId         String
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locationId       String?
+  name             String
+  category         String
+  priceGrosze      Int
+  description      String       @default("")
+  imageUrl         String?
+  imageAspectRatio String       @default("1:1")
+  available        Boolean      @default(true)
+  isCombo          Boolean      @default(false)
+  comboItemIds     String       @default("[]")
+  translations     String       @default("{}")
+  sortOrder        Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  recipeLines      RecipeLine[]
+}
+
+model Table {
+  id             String      @id @default(cuid())
+  tenantId       String
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locationId     String
+  number         Int
+  seats          Int
+  status         TableStatus @default(AVAILABLE)
+  currentOrderId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([tenantId, locationId, number])
+}
+
+model Customer {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name             String
+  email            String?
+  phone            String?
+  orderCount       Int      @default(0)
+  totalSpentGrosze Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  orders           Order[]
+
+  @@index([tenantId, email])
+  @@index([tenantId, phone])
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  tenantId      String
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locationId    String?
+  customerId    String?
+  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  tableNumber   Int?
+  status        OrderStatus @default(PENDING)
+  source        OrderSource @default(DINE_IN)
+  placedAt      DateTime    @default(now())
+  customerName  String?
+  customerPhone String?
+  customerEmail String?
+  items         OrderLine[]
+  payment       Payment?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderLine {
+  id          String @id @default(cuid())
+  orderId     String
+  order       Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId  String
+  name        String
+  quantity    Int
+  priceGrosze Int
+  notes       String?
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method      String
+  tipGrosze   Int      @default(0)
+  totalGrosze Int
+  paidAt      DateTime @default(now())
+}
+
+model InventoryItem {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  unit         String              @default("kg")
+  stockQty     Float               @default(0)
+  minStockQty  Float               @default(0)
+  costGrosze   Int                 @default(0)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  recipeLines  RecipeLine[]
+  movements    InventoryMovement[]
+
+  @@unique([tenantId, name])
+}
+
+model RecipeLine {
+  id              String        @id @default(cuid())
+  menuItemId      String
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  quantity        Float
+
+  @@unique([menuItemId, inventoryItemId])
+}
+
+model InventoryMovement {
+  id              String        @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  type            String
+  quantity        Float
+  note            String?
+  menuItemId      String?
+  orderId         String?
+  createdAt       DateTime      @default(now())
+}

@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #fafaf7;
+  --foreground: #1c1410;
+  --card: #ffffff;
+  --card-foreground: #1c1410;
+  --popover: #ffffff;
+  --popover-foreground: #1c1410;
+  --primary: #c4622d;
+  --primary-foreground: #ffffff;
+  --secondary: #fef3ec;
+  --secondary-foreground: #9c4a1a;
+  --muted: #f5ede4;
+  --muted-foreground: #8a7060;
+  --accent: #f59e0b;
+  --accent-foreground: #1c1410;
+  --destructive: #dc2626;
+  --border: rgba(28, 20, 16, 0.12);
+  --input-background: #f5ede4;
+  --ring: #c4622d;
+  --chart-1: #c4622d;
+  --chart-2: #f59e0b;
+  --chart-3: #16a34a;
+  --chart-4: #3b82f6;
+  --chart-5: #8b5cf6;
+  --radius: 0.75rem;
+  --sidebar: #1c1410;
+  --sidebar-foreground: #f5ede4;
+  --sidebar-primary: #c4622d;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --surface-cream: #fafaf7;
+  --surface-dark: #0d0805;
+  --surface-card-dark: #1c1410;
+}
+
+.dark {
+  --background: #1c1410;
+  --foreground: #fafaf7;
+  --card: #261a13;
+  --card-foreground: #fafaf7;
+  --secondary: #3a2418;
+  --muted: #3a2418;
+  --muted-foreground: #a89080;
+  --border: rgba(255, 255, 255, 0.1);
+  --input-background: rgba(255, 255, 255, 0.06);
+  --sidebar: #120d09;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-sans-body);
+  --font-serif: var(--font-serif-display);
+  --font-mono: var(--font-mono-data);
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans-body), system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif-display), Georgia, serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 999px;
+  }
+}
+
+.dashboard-card {
+  border: 1px solid rgba(28, 20, 16, 0.08);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 85%, var(--accent)));
+  color: var(--primary-foreground);
+  font-weight: 600;
+  border-radius: 0.75rem;
+}
