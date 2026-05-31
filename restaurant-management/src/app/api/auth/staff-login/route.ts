@@ -1,20 +1,23 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAuthError, requireTenantSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
-import { getSession, type StaffRole } from "@/lib/session";
+import { checkRateLimit } from "@/lib/rate-limit";
+import type { StaffRole } from "@/lib/session";
 
 const schema = z.object({
   role: z.enum(["OWNER", "KITCHEN", "CASHIER"]),
-  credential: z.string().min(1),
+  credential: z.string().min(1).max(128),
   locationId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session.tenantId) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const limited = checkRateLimit(req, "auth-staff-login", 15, 60_000);
+  if (limited) return limited;
+
+  const session = await requireTenantSession();
+  if (isAuthError(session)) return session;
 
   try {
     const body = schema.parse(await req.json());

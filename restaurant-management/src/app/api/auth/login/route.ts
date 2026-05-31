@@ -2,14 +2,18 @@ import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getSession } from "@/lib/session";
 
 const schema = z.object({
   email: z.string().email(),
-  password: z.string().min(1),
+  password: z.string().min(1).max(128),
 });
 
 export async function POST(req: Request) {
+  const limited = checkRateLimit(req, "auth-login", 10, 60_000);
+  if (limited) return limited;
+
   try {
     const body = schema.parse(await req.json());
     const user = await prisma.user.findFirst({

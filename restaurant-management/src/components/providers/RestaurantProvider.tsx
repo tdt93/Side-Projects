@@ -18,6 +18,12 @@ export type MenuItemDto = {
   isShared?: boolean;
 };
 
+export type OrderLineInput = {
+  menuItemId: string;
+  quantity: number;
+  notes?: string;
+};
+
 export type OrderLineDto = {
   menuItemId: string;
   name: string;
@@ -116,8 +122,8 @@ type RestaurantContextType = {
   loading: boolean;
   refresh: () => Promise<void>;
   setActiveLocation: (locationId: string | null) => Promise<void>;
-  updateOrder: (id: string, updates: Partial<OrderDto>) => Promise<void>;
-  addOrder: (order: Partial<OrderDto> & { tableNumber?: number }) => Promise<void>;
+  updateOrder: (id: string, updates: Partial<Omit<OrderDto, "items">> & { items?: OrderLineInput[] }) => Promise<void>;
+  addOrder: (order: Partial<Omit<OrderDto, "items">> & { tableNumber?: number; items?: OrderLineInput[] }) => Promise<void>;
   updateTable: (number: number, updates: Partial<TableDto>) => Promise<void>;
   updateMenuItem: (id: string, updates: Partial<MenuItemDto>) => Promise<void>;
   addMenuItem: (item: Omit<MenuItemDto, "id">) => Promise<void>;
@@ -221,7 +227,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   }, [refresh, applyPayload]);
 
   const updateOrder = useCallback(
-    async (id: string, updates: Partial<OrderDto>) => {
+    async (id: string, updates: Partial<Omit<OrderDto, "items">> & { items?: OrderLineInput[] }) => {
       await fetch(`/api/orders/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -233,7 +239,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   );
 
   const addOrder = useCallback(
-    async (order: Partial<OrderDto> & { tableNumber?: number }) => {
+    async (order: Partial<Omit<OrderDto, "items">> & { tableNumber?: number; items?: OrderLineInput[] }) => {
       await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

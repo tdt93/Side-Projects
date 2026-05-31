@@ -73,8 +73,12 @@
       "cashier": "Kasjer",
       "cashierDesc": "Stoliki, zamówienia i rachunki",
       "owner": "Właściciel",
-      "ownerDesc": "Pełny panel i ustawienia"
-    }
+      "ownerDesc": "Pełny panel i ustawienia",
+      "pinHint": "Wpisz PIN ustawiony przy rejestracji"
+    },
+    "staffPinsTitle": "Zapisz PIN-y personelu",
+    "staffPinsNote": "Wyświetlane tylko raz. Przekaż bezpiecznie kuchni i kasie.",
+    "continueToLogin": "Przejdź do logowania"
   },
   "menuCategories": {
     "starters": "Przystawki",
@@ -131,6 +135,7 @@
     "confirmBill": "Potwierdź i drukuj",
     "acceptOrder": "Przyjmij",
     "markDelivered": "Dostarczone",
+    "collectPayment": "Pobierz płatność",
     "noOnlineOrders": "Brak zamówień online",
     "paymentCash": "Gotówka",
     "paymentCard": "Karta",

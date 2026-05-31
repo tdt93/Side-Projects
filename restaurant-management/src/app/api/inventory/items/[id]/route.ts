@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
-import { getSession } from "@/lib/session";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const body = z
@@ -29,8 +29,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const existing = await prisma.inventoryItem.findFirst({

@@ -15,7 +15,6 @@ import {
   MapPin,
   Menu,
   Package,
-  Plus,
   Printer,
   QrCode,
   Receipt,

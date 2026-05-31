@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { routing } from "@/i18n/routing";
-import { getSession } from "@/lib/session";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const loc = await prisma.location.findFirst({ where: { id, tenantId: session.tenantId } });

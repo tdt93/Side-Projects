@@ -1,25 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAuthError, requireStaffSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { taxFromSubtotal } from "@/lib/currency";
 import { deductInventoryForOrder, upsertCustomerFromOrder } from "@/lib/inventory";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
-import { getSession } from "@/lib/session";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireStaffSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const order = await prisma.order.findFirst({
     where: { id, tenantId: session.tenantId },
-    include: { items: true },
+    include: { items: true, payment: true },
   });
   if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (order.payment) return NextResponse.json({ error: "Already paid" }, { status: 400 });
 
   const settings = await prisma.restaurantSettings.findUnique({ where: { tenantId: session.tenantId } });
   const taxRateBps = settings?.taxRateBps ?? 800;
-  const body = z.object({ tipGrosze: z.number().int().nonnegative(), method: z.string() }).parse(await req.json());
+  const body = z.object({ tipGrosze: z.number().int().nonnegative(), method: z.string().min(1).max(40) }).parse(await req.json());
 
   const subtotal = order.items.reduce((s, i) => s + i.priceGrosze * i.quantity, 0);
   const tax = taxFromSubtotal(subtotal, taxRateBps);

@@ -73,8 +73,12 @@
       "cashier": "Cashier",
       "cashierDesc": "Tables, orders & billing",
       "owner": "Owner",
-      "ownerDesc": "Full dashboard & settings"
-    }
+      "ownerDesc": "Full dashboard & settings",
+      "pinHint": "Enter the PIN set at registration"
+    },
+    "staffPinsTitle": "Save your staff PINs",
+    "staffPinsNote": "These are shown once. Share them with kitchen and cashier staff securely.",
+    "continueToLogin": "Continue to login"
   },
   "menuCategories": {
     "starters": "Starters",
@@ -131,6 +135,7 @@
     "confirmBill": "Confirm & print",
     "acceptOrder": "Accept order",
     "markDelivered": "Mark delivered",
+    "collectPayment": "Collect payment",
     "noOnlineOrders": "No online orders",
     "paymentCash": "Cash",
     "paymentCard": "Card",

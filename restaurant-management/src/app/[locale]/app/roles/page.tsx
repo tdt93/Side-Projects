@@ -47,14 +47,14 @@ export default function RoleSelectPage() {
       label: t("roles.kitchen"),
       description: t("roles.kitchenDesc"),
       icon: ChefHat,
-      hint: "PIN: 1234",
+      hint: t("roles.pinHint"),
     },
     {
       id: "CASHIER" as const,
       label: t("roles.cashier"),
       description: t("roles.cashierDesc"),
       icon: CreditCard,
-      hint: "PIN: 5678",
+      hint: t("roles.pinHint"),
     },
     {
       id: "OWNER" as const,

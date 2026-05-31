@@ -19,6 +19,7 @@ export default function SignupPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [staffPins, setStaffPins] = useState<{ kitchen: string; cashier: string } | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +43,10 @@ export default function SignupPage() {
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Error");
+        return;
+      }
+      if (data.staffPins) {
+        setStaffPins(data.staffPins);
         return;
       }
       router.push(`/${locale}/login?registered=1`);
@@ -81,9 +86,26 @@ export default function SignupPage() {
               </div>
             ))}
             {error && <p className="text-sm text-red-600">{error}</p>}
+            {staffPins && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/40 dark:bg-amber-950/30">
+                <p className="font-semibold">{t("staffPinsTitle")}</p>
+                <p className="mt-1 text-muted-foreground">{t("staffPinsNote")}</p>
+                <ul className="mt-3 space-y-1 font-mono">
+                  <li>{t("roles.kitchen")}: {staffPins.kitchen}</li>
+                  <li>{t("roles.cashier")}: {staffPins.cashier}</li>
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/${locale}/login?registered=1`)}
+                  className="btn-primary mt-4 w-full py-2.5 text-sm"
+                >
+                  {t("continueToLogin")}
+                </button>
+              </div>
+            )}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || Boolean(staffPins)}
               className="w-full rounded-xl py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               style={{ background: "linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)))" }}
             >

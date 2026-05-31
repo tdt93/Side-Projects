@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { compressDishImage, type ImageAspect } from "@/lib/image-process";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
-import { getSession } from "@/lib/session";
 import { uploadMenuImage } from "@/lib/supabase";
+import { validateImageUpload } from "@/lib/upload-validation";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const item = await prisma.menuItem.findFirst({ where: { id, tenantId: session.tenantId } });
@@ -28,6 +29,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
     const image = form.get("image");
     if (image instanceof File && image.size > 0) {
+      const check = validateImageUpload(image);
+      if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
       const aspect = (String(form.get("imageAspectRatio") ?? item.imageAspectRatio) as ImageAspect) || "1:1";
       const buffer = Buffer.from(await image.arrayBuffer());
       const { buffer: compressed, mime } = await compressDishImage(buffer, aspect);
@@ -57,8 +60,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   await prisma.menuItem.deleteMany({ where: { id, tenantId: session.tenantId } });

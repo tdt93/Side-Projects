@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { compressDishImage, type ImageAspect } from "@/lib/image-process";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
-import { getSession } from "@/lib/session";
 import { uploadMenuImage } from "@/lib/supabase";
+import { validateImageUpload } from "@/lib/upload-validation";
 
 async function parseMenuBody(req: Request) {
   const contentType = req.headers.get("content-type") ?? "";
@@ -39,8 +40,8 @@ async function parseMenuBody(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
 
   const parsed = await parseMenuBody(req);
   const item = await prisma.menuItem.create({
@@ -57,6 +58,8 @@ export async function POST(req: Request) {
   });
 
   if (parsed.imageFile) {
+    const check = validateImageUpload(parsed.imageFile);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
     const buffer = Buffer.from(await parsed.imageFile.arrayBuffer());
     const { buffer: compressed, mime } = await compressDishImage(buffer, parsed.imageAspectRatio ?? "1:1");
     const imageUrl = await uploadMenuImage(session.tenantId, item.id, compressed, mime);

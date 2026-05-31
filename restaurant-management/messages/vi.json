@@ -73,8 +73,12 @@
       "cashier": "Thu ngân",
       "cashierDesc": "Bàn, đơn và hóa đơn",
       "owner": "Chủ nhà hàng",
-      "ownerDesc": "Bảng điều khiển đầy đủ"
-    }
+      "ownerDesc": "Bảng điều khiển đầy đủ",
+      "pinHint": "Nhập mã PIN đã thiết lập khi đăng ký"
+    },
+    "staffPinsTitle": "Lưu mã PIN nhân viên",
+    "staffPinsNote": "Chỉ hiển thị một lần. Chia sẻ an toàn với bếp và thu ngân.",
+    "continueToLogin": "Tiếp tục đăng nhập"
   },
   "menuCategories": {
     "starters": "Khai vị",
@@ -131,6 +135,7 @@
     "confirmBill": "Xác nhận & In",
     "acceptOrder": "Nhận đơn",
     "markDelivered": "Đã giao",
+    "collectPayment": "Thu tiền",
     "noOnlineOrders": "Không có đơn online",
     "paymentCash": "Tiền mặt",
     "paymentCard": "Thẻ",

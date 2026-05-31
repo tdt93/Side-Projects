@@ -34,7 +34,7 @@ export default function PublicMenuPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState<{ totalGrosze: number } | null>(null);
+  const [done, setDone] = useState<{ orderId: string; message?: string } | null>(null);
 
   useEffect(() => {
     void fetch(`/api/public/menu/${params.slug}/${params.locationId}`)
@@ -89,7 +89,7 @@ export default function PublicMenuPage() {
       });
       const json = await res.json();
       if (res.ok) {
-        setDone({ totalGrosze: json.totalGrosze });
+        setDone({ orderId: json.orderId, message: json.message });
         setCart([]);
         setCheckoutOpen(false);
       }
@@ -112,7 +112,8 @@ export default function PublicMenuPage() {
         <ShoppingCart className="h-12 w-12 text-primary" />
         <h1 className="font-serif text-2xl">Order placed!</h1>
         <p className="text-muted-foreground">Thank you, {name}.</p>
-        <p className="font-mono text-xl font-bold">{formatMoney(done.totalGrosze, data.currency)}</p>
+        <p className="max-w-sm text-sm text-muted-foreground">{done.message ?? "Your order is pending confirmation."}</p>
+        <p className="font-mono text-xs text-muted-foreground">#{done.orderId.slice(-8)}</p>
         <button type="button" onClick={() => setDone(null)} className="btn-primary mt-4 px-6 py-2">
           Order again
         </button>

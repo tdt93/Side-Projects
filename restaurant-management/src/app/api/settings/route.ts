@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
 import { extractColorsFromBuffer } from "@/lib/theme-server";
-import { getSession } from "@/lib/session";
+import { validateImageUpload } from "@/lib/upload-validation";
 
 export async function PATCH(req: Request) {
-  const session = await getSession();
-  if (!session.tenantId || session.staffRole !== "OWNER") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
 
   const contentType = req.headers.get("content-type") ?? "";
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
     const logo = form.get("logo");
     if (logo instanceof File) {
+      const check = validateImageUpload(logo);
+      if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
       const buffer = Buffer.from(await logo.arrayBuffer());
       const colors = await extractColorsFromBuffer(buffer);
       const base64 = `data:${logo.type};base64,${buffer.toString("base64")}`;

@@ -38,7 +38,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
 
   const table = tables.find((tb) => tb.number === selectedTable);
   const order = table?.orderId ? orders.find((o) => o.id === table.orderId) : null;
-  const onlineOrders = orders.filter((o) => o.source === "online" && o.status !== "paid");
+  const onlineOrders = orders.filter((o) => ["online", "qr-menu"].includes(o.source) && o.status !== "paid");
 
   const subtotal = order?.items.reduce((s, i) => s + i.priceGrosze * i.quantity, 0) ?? 0;
   const tax = taxFromSubtotal(subtotal, settings?.taxRateBps ?? 800);
@@ -50,24 +50,21 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
   async function handleQty(menuItemId: string, delta: number) {
     if (!order) return;
     const updated = order.items
-      .map((i) => (i.menuItemId === menuItemId ? { ...i, quantity: i.quantity + delta } : i))
+      .map((i) => (i.menuItemId === menuItemId ? { menuItemId: i.menuItemId, quantity: i.quantity + delta } : { menuItemId: i.menuItemId, quantity: i.quantity }))
       .filter((i) => i.quantity > 0);
     await updateOrder(order.id, { items: updated });
   }
 
   async function handleAddFromMenu(menuItemId: string, qty: number) {
     if (!order || qty <= 0) return;
-    const item = menuItems.find((m) => m.id === menuItemId);
-    if (!item) return;
     const existing = order.items.find((i) => i.menuItemId === menuItemId);
     const items = existing
       ? order.items.map((i) =>
-          i.menuItemId === menuItemId ? { ...i, quantity: i.quantity + qty } : i,
+          i.menuItemId === menuItemId
+            ? { menuItemId: i.menuItemId, quantity: i.quantity + qty }
+            : { menuItemId: i.menuItemId, quantity: i.quantity },
         )
-      : [
-          ...order.items,
-          { menuItemId: item.id, name: item.name, quantity: qty, priceGrosze: item.priceGrosze },
-        ];
+      : [...order.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })), { menuItemId, quantity: qty }];
     await updateOrder(order.id, { items });
     setShowAdd(false);
   }
@@ -249,8 +246,21 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                     </button>
                   )}
                   {o.status === "ready" && (
-                    <button type="button" onClick={() => void updateOrder(o.id, { status: "paid" })} className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white">
+                    <button
+                      type="button"
+                      onClick={() => void payOrder(o.id, { tipGrosze: 0, method: "online" })}
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
                       {t("markDelivered")}
+                    </button>
+                  )}
+                  {(o.status === "pending" && o.source === "qr-menu") && (
+                    <button
+                      type="button"
+                      onClick={() => void payOrder(o.id, { tipGrosze: 0, method: "qr" })}
+                      className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      {t("collectPayment")}
                     </button>
                   )}
                 </div>

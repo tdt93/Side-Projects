@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isAuthError, requireOwnerSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
-import { getSession } from "@/lib/session";
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const body = z
     .object({
-      name: z.string().min(1).optional(),
-      address: z.string().optional(),
-      phone: z.string().optional(),
+      name: z.string().min(1).max(120).optional(),
+      address: z.string().max(300).optional(),
+      phone: z.string().max(40).optional(),
       latitude: z.number().nullable().optional(),
       longitude: z.number().nullable().optional(),
       isActive: z.boolean().optional(),
@@ -35,8 +35,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session.tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const session = await requireOwnerSession();
+  if (isAuthError(session)) return session;
   const { id } = await ctx.params;
 
   const existing = await prisma.location.findFirst({
