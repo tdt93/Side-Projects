@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "dev:tunnel": "next build --turbopack && next start -H 0.0.0.0 -p 3000",
     "build": "next build --turbopack",
     "build:webpack": "next build --webpack",
     "build:hosting": "node scripts/build-hosting.js",

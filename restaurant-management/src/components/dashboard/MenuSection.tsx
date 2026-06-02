@@ -3,8 +3,9 @@
 import { useRef, useState } from "react";
 import {
   Check,
-  Edit3,
+  ChevronDown,
   ImagePlus,
+  Pencil,
   Plus,
   ToggleLeft,
   ToggleRight,
@@ -13,7 +14,11 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { LayoutToggle } from "@/components/ui/LayoutToggle";
+import { AppSelect } from "@/components/ui/AppSelect";
 import { useRestaurant, type MenuItemDto } from "@/components/providers/RestaurantProvider";
+import { useLayoutPreference } from "@/hooks/use-layout-preference";
 import { formatMoney } from "@/lib/currency";
 import { CATEGORY_I18N_KEYS } from "@/lib/menu-categories";
 
@@ -59,6 +64,8 @@ export function MenuSection() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [showCategories, setShowCategories] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<MenuItemDto | null>(null);
+  const [layout, setLayout] = useLayoutPreference("menu-layout", "grid");
 
   const categoryNames =
     dbCategories.length > 0
@@ -147,7 +154,7 @@ export function MenuSection() {
   }
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className="space-y-5 p-4 sm:p-6 animate-section-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-serif text-xl sm:text-2xl">{t("title")}</h1>
@@ -158,19 +165,35 @@ export function MenuSection() {
             })}
           </p>
         </div>
-        <button type="button" onClick={openAdd} className="btn-primary flex items-center justify-center gap-2 px-4 py-2 text-sm">
-          <Plus className="h-4 w-4" /> {t("addItem")}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <LayoutToggle
+            value={layout}
+            onChange={setLayout}
+            options={["grid", "list", "compact"]}
+            labels={{ grid: t("layoutGrid"), list: t("layoutList"), compact: t("layoutCompact") }}
+          />
+          <button type="button" onClick={openAdd} className="interactive btn-primary flex items-center justify-center gap-2 px-4 py-2 text-sm">
+            <Plus className="h-4 w-4" /> {t("addItem")}
+          </button>
+        </div>
       </div>
 
       <div className="dashboard-card p-4">
         <button
           type="button"
           onClick={() => setShowCategories((v) => !v)}
-          className="flex w-full items-center justify-between text-sm font-semibold"
+          className="interactive flex w-full items-center justify-between rounded-xl px-1 py-0.5 text-sm font-semibold"
+          aria-expanded={showCategories}
         >
-          {t("manageCategories")}
-          <span className="text-muted-foreground">{dbCategories.length || categoryNames.length}</span>
+          <span className="flex items-center gap-2">
+            <ChevronDown
+              className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${showCategories ? "rotate-180" : ""}`}
+            />
+            {t("manageCategories")}
+          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {dbCategories.length || categoryNames.length}
+          </span>
         </button>
         {showCategories && (
           <div className="mt-4 space-y-3 border-t border-border pt-4">
@@ -208,14 +231,14 @@ export function MenuSection() {
                                 setEditingCategoryId(cat.id);
                                 setEditingCategoryName(cat.name);
                               }}
-                              className="rounded p-1 hover:bg-background"
+                              className="interactive rounded p-1 hover:bg-background"
                             >
-                              <Edit3 className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </button>
                             <button
                               type="button"
                               onClick={() => void deleteCategory(cat.id)}
-                              className="rounded p-1 text-red-500 hover:bg-background"
+                              className="interactive rounded p-1 text-red-500 hover:bg-background"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -260,7 +283,7 @@ export function MenuSection() {
               key={tab.id}
               type="button"
               onClick={() => setLocationFilter(tab.id)}
-              className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium"
+              className="interactive shrink-0 rounded-full px-3 py-1.5 text-xs font-medium"
               style={{
                 background: locationFilter === tab.id ? "var(--primary)" : "var(--muted)",
                 color: locationFilter === tab.id ? "#fff" : undefined,
@@ -278,7 +301,7 @@ export function MenuSection() {
             key={cat}
             type="button"
             onClick={() => setCategory(cat)}
-            className="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-all"
+            className="interactive shrink-0 rounded-full px-3 py-1.5 text-sm font-medium"
             style={{
               background: category === cat ? "var(--primary)" : "var(--muted)",
               color: category === cat ? "#fff" : undefined,
@@ -289,12 +312,93 @@ export function MenuSection() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {filtered.map((item) => {
+      <div
+        className={
+          layout === "grid"
+            ? "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+            : layout === "list"
+              ? "flex flex-col gap-3"
+              : "flex flex-col gap-2"
+        }
+      >
+        {filtered.map((item, index) => {
           const aspect = item.imageAspectRatio === "3:4" ? "aspect-[3/4]" : "aspect-square";
+
+          if (layout === "list") {
+            return (
+              <article
+                key={item.id}
+                className="dashboard-card group flex gap-4 overflow-hidden p-3 transition-all duration-200 animate-fade-in"
+                style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+              >
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-muted">
+                  {item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-muted-foreground/40">
+                      <ImagePlus className="h-6 w-6" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <MenuItemBody
+                    item={item}
+                    currency={currency}
+                    categoryLabel={categoryLabel}
+                    locationLabel={locationLabel}
+                    t={t}
+                    onEdit={() => openEdit(item)}
+                    onDelete={() => setDeleteTarget(item)}
+                    onToggle={() => void updateMenuItem(item.id, { available: !item.available })}
+                  />
+                </div>
+              </article>
+            );
+          }
+
+          if (layout === "compact") {
+            return (
+              <article
+                key={item.id}
+                className="dashboard-card flex items-center justify-between gap-3 px-4 py-3 transition-all duration-200 animate-fade-in"
+                style={{ animationDelay: `${Math.min(index, 8) * 30}ms` }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate font-semibold">{item.name}</h3>
+                    {!item.available && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-bold text-muted-foreground">
+                        {t("offMenu")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {categoryLabel(item.category)} · {locationLabel(item)}
+                  </p>
+                </div>
+                <span className="shrink-0 font-mono text-sm font-bold text-primary">
+                  {formatMoney(item.priceGrosze, currency)}
+                </span>
+                <div className="flex shrink-0 gap-1">
+                  <button type="button" onClick={() => openEdit(item)} className="interactive rounded-lg border border-primary/25 bg-primary/10 p-1.5 text-primary hover:bg-primary/15" title={t("editItem")}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => setDeleteTarget(item)} className="interactive rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 dark:hover:bg-red-950/30">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </article>
+            );
+          }
+
           return (
-            <article key={item.id} className="dashboard-card group overflow-hidden">
-              <div className={`relative ${aspect} overflow-hidden bg-muted`}>
+            <article
+              key={item.id}
+              className="dashboard-card group overflow-hidden transition-all duration-200 animate-fade-in"
+              style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
+            >
+              <div className={`relative ${aspect} max-h-36 overflow-hidden bg-muted`}>
                 {item.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
@@ -314,40 +418,17 @@ export function MenuSection() {
                   </span>
                 )}
               </div>
-              <div className="space-y-2 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="truncate font-semibold">{item.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {categoryLabel(item.category)} · {locationLabel(item)}
-                    </p>
-                  </div>
-                  <span className="shrink-0 font-mono text-sm font-bold text-primary">
-                    {formatMoney(item.priceGrosze, currency)}
-                  </span>
-                </div>
-                {item.description && (
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
-                )}
-                <div className="flex items-center justify-between border-t border-border/50 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => void updateMenuItem(item.id, { available: !item.available })}
-                    className="flex items-center gap-1 text-xs font-semibold"
-                    style={{ color: item.available ? "#16A34A" : "#8A7060" }}
-                  >
-                    {item.available ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
-                    {item.available ? t("available") : t("offMenu")}
-                  </button>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => openEdit(item)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-orange-50 dark:hover:bg-white/5">
-                      <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" onClick={() => void deleteMenuItem(item.id)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-50 dark:hover:bg-red-950/30">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
+              <div className="space-y-1.5 p-3">
+                <MenuItemBody
+                  item={item}
+                  currency={currency}
+                  categoryLabel={categoryLabel}
+                  locationLabel={locationLabel}
+                  t={t}
+                  onEdit={() => openEdit(item)}
+                  onDelete={() => setDeleteTarget(item)}
+                  onToggle={() => void updateMenuItem(item.id, { available: !item.available })}
+                />
               </div>
             </article>
           );
@@ -360,6 +441,17 @@ export function MenuSection() {
           {t("empty")}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={t("deleteItemTitle")}
+        message={t("deleteItemMessage", { name: deleteTarget?.name ?? "" })}
+        confirmLabel={tCommon("delete")}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) void deleteMenuItem(deleteTarget.id).then(() => setDeleteTarget(null));
+        }}
+      />
 
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
@@ -435,15 +527,11 @@ export function MenuSection() {
 
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("category")}</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                  className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-sm"
-                >
+                <AppSelect value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}>
                   {categoryNames.map((c) => (
                     <option key={c} value={c}>{categoryLabel(c)}</option>
                   ))}
-                </select>
+                </AppSelect>
               </div>
 
               <label className="flex items-center gap-2 text-sm">
@@ -452,19 +540,16 @@ export function MenuSection() {
               </label>
 
               {!editingItem && locations.length > 0 && (
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("scopeShared")}</label>
-                  <select
-                    value={itemScope}
-                    onChange={(e) => setItemScope(e.target.value)}
-                    className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-sm"
-                  >
-                    <option value="shared">{t("scopeShared")}</option>
-                    {locations.map((l) => (
-                      <option key={l.id} value={l.id}>{t("scopeBranch")}: {l.name}</option>
-                    ))}
-                  </select>
-                </div>
+                <AppSelect
+                  label={t("scopeShared")}
+                  value={itemScope}
+                  onChange={(e) => setItemScope(e.target.value)}
+                >
+                  <option value="shared">{t("scopeShared")}</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{t("scopeBranch")}: {l.name}</option>
+                  ))}
+                </AppSelect>
               )}
             </div>
 
@@ -485,5 +570,72 @@ export function MenuSection() {
         </div>
       )}
     </div>
+  );
+}
+
+function MenuItemBody({
+  item,
+  currency,
+  categoryLabel,
+  locationLabel,
+  t,
+  onEdit,
+  onDelete,
+  onToggle,
+}: {
+  item: MenuItemDto;
+  currency: string;
+  categoryLabel: (cat: string) => string;
+  locationLabel: (item: MenuItemDto) => string;
+  t: (key: string) => string;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold">{item.name}</h3>
+          <p className="text-xs text-muted-foreground">
+            {categoryLabel(item.category)} · {locationLabel(item)}
+          </p>
+        </div>
+        <span className="shrink-0 font-mono text-sm font-bold text-primary">
+          {formatMoney(item.priceGrosze, currency)}
+        </span>
+      </div>
+      {item.description && (
+        <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+      )}
+      <div className="flex items-center justify-between border-t border-border/50 pt-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="interactive flex items-center gap-1 text-xs font-semibold"
+          style={{ color: item.available ? "#16A34A" : "var(--muted-foreground)" }}
+        >
+          {item.available ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+          {item.available ? t("available") : t("offMenu")}
+        </button>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={onEdit}
+            title={t("editItem")}
+            className="interactive rounded-lg border border-primary/25 bg-primary/10 p-2 text-primary hover:bg-primary/15"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="interactive rounded-lg p-2 text-muted-foreground hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

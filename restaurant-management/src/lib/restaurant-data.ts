@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { StaffRole } from "@/lib/session";
+import { endOfDay, startOfDay } from "@/lib/order-display";
+import { effectiveTableStatus, mapReservation } from "@/lib/table-reservations";
 
 function parseJsonArray(value: string) {
   try {
@@ -72,7 +74,20 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
         ])
       : Promise.resolve([[], [], []] as const);
 
-  const [tenant, settings, menuItems, orders, tables, ownerData] = await Promise.all([
+  const reservationWhere = viewAll || !locationId
+    ? {
+        tenantId,
+        startsAt: { lte: endOfDay(new Date()) },
+        endsAt: { gte: startOfDay(new Date()) },
+      }
+    : {
+        tenantId,
+        locationId,
+        startsAt: { lte: endOfDay(new Date()) },
+        endsAt: { gte: startOfDay(new Date()) },
+      };
+
+  const [tenant, settings, menuItems, orders, tables, reservations, ownerData] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -96,10 +111,15 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
       where: tableWhere,
       orderBy: [{ locationId: "asc" }, { number: "asc" }],
     }),
+    prisma.tableReservation.findMany({
+      where: reservationWhere,
+      orderBy: { startsAt: "asc" },
+    }),
     ownerExtras,
   ]);
 
   const [categories, customers, inventoryItems] = ownerData;
+  const now = new Date();
 
   return {
     tenant,
@@ -113,6 +133,9 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
           defaultLocale: settings.defaultLocale,
           themeMode: settings.themeMode,
           menuMode: settings.menuMode as "shared" | "mixed" | "per_location",
+          posEnabled: settings.posEnabled,
+          posProvider: settings.posProvider,
+          posEndpoint: settings.posEndpoint ?? undefined,
         }
       : {
           currency: "PLN",
@@ -159,9 +182,10 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
       locationId: t.locationId,
       number: t.number,
       seats: t.seats,
-      status: t.status.toLowerCase(),
+      status: effectiveTableStatus(t, reservations, now),
       orderId: t.currentOrderId ?? undefined,
     })),
+    reservations: reservations.map(mapReservation),
     locations: locations.map((l) => ({
       id: l.id,
       name: l.name,
@@ -170,6 +194,7 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
       latitude: l.latitude ?? undefined,
       longitude: l.longitude ?? undefined,
       isActive: l.isActive,
+      openingHours: l.openingHours,
     })),
     categories: categories.map((c) => ({
       id: c.id,

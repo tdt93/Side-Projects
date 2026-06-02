@@ -1,6 +1,8 @@
 "use client";
 
+import { useLocale } from "next-intl";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { navigateTo } from "@/lib/client-navigate";
 import type { StaffRole } from "@/lib/session";
 
 export type MenuItemDto = {
@@ -53,6 +55,17 @@ export type TableDto = {
   orderId?: string;
 };
 
+export type ReservationDto = {
+  id: string;
+  locationId: string;
+  tableNumber: number;
+  guestName: string;
+  guestPhone?: string;
+  startsAt: string;
+  endsAt: string;
+  notes?: string;
+};
+
 export type LocationDto = {
   id: string;
   name: string;
@@ -61,6 +74,7 @@ export type LocationDto = {
   latitude?: number;
   longitude?: number;
   isActive: boolean;
+  openingHours?: string;
 };
 
 export type MenuCategoryDto = {
@@ -104,6 +118,9 @@ export type SettingsDto = {
   defaultLocale?: string;
   themeMode?: string;
   menuMode?: "shared" | "mixed" | "per_location";
+  posEnabled?: boolean;
+  posProvider?: string | null;
+  posEndpoint?: string;
 };
 
 type RestaurantContextType = {
@@ -112,6 +129,7 @@ type RestaurantContextType = {
   menuItems: MenuItemDto[];
   orders: OrderDto[];
   tables: TableDto[];
+  reservations: ReservationDto[];
   locations: LocationDto[];
   categories: MenuCategoryDto[];
   customers: CustomerDto[];
@@ -125,6 +143,11 @@ type RestaurantContextType = {
   updateOrder: (id: string, updates: Partial<Omit<OrderDto, "items">> & { items?: OrderLineInput[] }) => Promise<void>;
   addOrder: (order: Partial<Omit<OrderDto, "items">> & { tableNumber?: number; items?: OrderLineInput[] }) => Promise<void>;
   updateTable: (number: number, updates: Partial<TableDto>) => Promise<void>;
+  addReservation: (
+    tableNumber: number,
+    payload: { guestName: string; guestPhone?: string; startsAt: string; endsAt: string; notes?: string },
+  ) => Promise<void>;
+  deleteReservation: (id: string) => Promise<void>;
   updateMenuItem: (id: string, updates: Partial<MenuItemDto>) => Promise<void>;
   addMenuItem: (item: Omit<MenuItemDto, "id">) => Promise<void>;
   deleteMenuItem: (id: string) => Promise<void>;
@@ -147,6 +170,7 @@ type Payload = {
   menuItems: MenuItemDto[];
   orders: OrderDto[];
   tables: TableDto[];
+  reservations?: ReservationDto[];
   locations: LocationDto[];
   categories?: MenuCategoryDto[];
   customers?: CustomerDto[];
@@ -156,11 +180,13 @@ type Payload = {
 };
 
 export function RestaurantProvider({ children }: { children: React.ReactNode }) {
+  const locale = useLocale();
   const [tenant, setTenant] = useState<TenantDto | null>(null);
   const [settings, setSettings] = useState<SettingsDto | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItemDto[]>([]);
   const [orders, setOrders] = useState<OrderDto[]>([]);
   const [tables, setTables] = useState<TableDto[]>([]);
+  const [reservations, setReservations] = useState<ReservationDto[]>([]);
   const [locations, setLocations] = useState<LocationDto[]>([]);
   const [categories, setCategories] = useState<MenuCategoryDto[]>([]);
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
@@ -176,6 +202,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     setMenuItems(data.menuItems);
     setOrders(data.orders);
     setTables(data.tables);
+    setReservations(data.reservations ?? []);
     setLocations(data.locations);
     setCategories(data.categories ?? []);
     setCustomers(data.customers ?? []);
@@ -185,17 +212,27 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    void fetch("/api/auth/session")
-      .then((r) => r.json())
-      .then((s) => setStaffRole(s.staffRole));
-  }, []);
-
   const refresh = useCallback(async () => {
-    const res = await fetch("/api/restaurant/data");
-    if (!res.ok) return;
-    applyPayload(await res.json());
-  }, [applyPayload]);
+    const [dataRes, sessionRes] = await Promise.all([
+      fetch("/api/restaurant/data"),
+      fetch("/api/auth/session"),
+    ]);
+
+    if (sessionRes.ok) {
+      const session = await sessionRes.json();
+      setStaffRole(session.staffRole);
+    }
+
+    if (!dataRes.ok) {
+      setLoading(false);
+      if (dataRes.status === 401) {
+        navigateTo(`/${locale}/login`);
+      }
+      return;
+    }
+
+    applyPayload(await dataRes.json());
+  }, [applyPayload, locale]);
 
   const setActiveLocation = useCallback(
     async (locationId: string | null) => {
@@ -211,19 +248,40 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     void refresh();
-    const es = new EventSource("/api/restaurant/stream");
 
-    es.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as { type: string; payload: Payload };
-        if (msg.type === "update") applyPayload(msg.payload);
-      } catch {
-        /* ignore malformed events */
-      }
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const connect = () => {
+      if (closed) return;
+      es = new EventSource("/api/restaurant/stream");
+
+      es.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as { type: string; payload: Payload };
+          if (msg.type === "update") applyPayload(msg.payload);
+        } catch {
+          /* ignore malformed events */
+        }
+      };
+
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        if (!closed) {
+          reconnectTimer = setTimeout(connect, 3000);
+        }
+      };
     };
 
-    es.onerror = () => es.close();
-    return () => es.close();
+    connect();
+
+    return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
+    };
   }, [refresh, applyPayload]);
 
   const updateOrder = useCallback(
@@ -257,6 +315,29 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const addReservation = useCallback(
+    async (
+      tableNumber: number,
+      payload: { guestName: string; guestPhone?: string; startsAt: string; endsAt: string; notes?: string },
+    ) => {
+      await fetch(`/api/tables/${tableNumber}/reservations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await refresh();
+    },
+    [refresh],
+  );
+
+  const deleteReservation = useCallback(
+    async (id: string) => {
+      await fetch(`/api/reservations/${id}`, { method: "DELETE" });
       await refresh();
     },
     [refresh],
@@ -401,6 +482,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       menuItems,
       orders,
       tables,
+      reservations,
       locations,
       categories,
       customers,
@@ -414,6 +496,8 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       updateOrder,
       addOrder,
       updateTable,
+      addReservation,
+      deleteReservation,
       updateMenuItem,
       addMenuItem,
       deleteMenuItem,
@@ -433,6 +517,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       menuItems,
       orders,
       tables,
+      reservations,
       locations,
       categories,
       customers,
@@ -446,6 +531,8 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       updateOrder,
       addOrder,
       updateTable,
+      addReservation,
+      deleteReservation,
       updateMenuItem,
       addMenuItem,
       deleteMenuItem,

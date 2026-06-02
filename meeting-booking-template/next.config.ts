@@ -5,14 +5,34 @@ import { fileURLToPath } from "url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const isHostingBuild = process.env.LOW_RESOURCE_BUILD === "1";
 
-const nextConfig: NextConfig = {
-  allowedDevOrigins: [
+function getAllowedDevOrigins(): string[] {
+  const origins = new Set<string>([
     "gabinety.trzymsie.pl",
     "trzymsiedemo.tdtdev.net",
-    "*.trycloudflare.com",
     "localhost",
     "127.0.0.1",
-  ],
+  ]);
+
+  const tunnelHost = process.env.DEV_TUNNEL_HOST?.trim();
+  if (tunnelHost) origins.add(tunnelHost);
+
+  const appUrl = process.env.APP_URL?.trim();
+  if (appUrl) {
+    try {
+      const host = new URL(appUrl).hostname;
+      if (host && host !== "localhost" && host !== "127.0.0.1") {
+        origins.add(host);
+      }
+    } catch {
+      /* ignore invalid APP_URL */
+    }
+  }
+
+  return [...origins];
+}
+
+const nextConfig: NextConfig = {
+  allowedDevOrigins: getAllowedDevOrigins(),
   // Keep file tracing inside this app (repo root is parent "Side Projects").
   outputFileTracingRoot: projectRoot,
   ...(isHostingBuild

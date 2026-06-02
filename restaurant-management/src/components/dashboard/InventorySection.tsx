@@ -32,7 +32,7 @@ export function InventorySection() {
   useEffect(() => {
     void fetch("/api/inventory/recipes")
       .then((r) => r.json())
-      .then(setRecipes);
+      .then((data) => setRecipes(Array.isArray(data) ? data : []));
   }, [inventoryItems]);
 
   async function handleAddItem() {
@@ -62,7 +62,7 @@ export function InventorySection() {
     });
     await refresh();
     const rows = await fetch("/api/inventory/recipes").then((r) => r.json());
-    setRecipes(rows);
+    setRecipes(Array.isArray(rows) ? rows : []);
   }
 
   async function handleDeleteRecipe(id: string) {

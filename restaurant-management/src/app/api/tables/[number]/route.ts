@@ -37,6 +37,10 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ number: strin
     data: {
       status: body.status ? statusMap[String(body.status).toLowerCase()] : undefined,
       currentOrderId: body.orderId === undefined ? undefined : body.orderId,
+      reservedAt: body.reservedAt === undefined ? undefined : body.reservedAt ? new Date(body.reservedAt) : null,
+      reservedUntil:
+        body.reservedUntil === undefined ? undefined : body.reservedUntil ? new Date(body.reservedUntil) : null,
+      reservationName: body.reservationName === undefined ? undefined : body.reservationName,
     },
   });
 

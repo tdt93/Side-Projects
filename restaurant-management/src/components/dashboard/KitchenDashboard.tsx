@@ -7,10 +7,13 @@ import {
   ChefHat,
   Clock,
   Flame,
+  History,
   LogOut,
   Wifi,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { OrderHistoryPanel } from "@/components/dashboard/OrderHistoryPanel";
+import { OrderItemsGrouped } from "@/components/dashboard/OrderItemsGrouped";
 import { LocationSelector } from "@/components/layout/LocationSelector";
 import { useRestaurant } from "@/components/providers/RestaurantProvider";
 
@@ -45,7 +48,9 @@ export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: bo
   const t = useTranslations("kitchen");
   const tOrder = useTranslations("orderStatus");
   const tCommon = useTranslations("common");
-  const { tenant, orders, updateOrder } = useRestaurant();
+  const { tenant, settings, menuItems, orders, updateOrder } = useRestaurant();
+  const currency = settings?.currency ?? "PLN";
+  const [view, setView] = useState<"active" | "history">("active");
   const [filter, setFilter] = useState<string>("all");
   const [clock, setClock] = useState(new Date());
 
@@ -124,6 +129,31 @@ export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: bo
 
       <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-3 sm:px-6">
         {[
+          { id: "active" as const, label: t("allActive"), icon: ChefHat },
+          { id: "history" as const, label: t("orderHistory"), icon: History },
+        ].map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id)}
+            className="interactive flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium"
+            style={{
+              background: view === id ? "var(--primary)" : "rgba(255,255,255,0.04)",
+              color: view === id ? "#fff" : "#6B5B50",
+              border: `1px solid ${view === id ? "var(--primary)" : "rgba(255,255,255,0.06)"}`,
+            }}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "history" ? (
+        <OrderHistoryPanel menuItems={menuItems} currency={currency} dark />
+      ) : (
+        <>
+      <div className="flex gap-2 overflow-x-auto border-b border-white/10 px-4 py-3 sm:px-6">
+        {[
           { id: "all", label: t("allActive"), count: active.length },
           { id: "pending", label: t("pending"), count: pendingCount },
           { id: "cooking", label: t("cooking"), count: cookingCount },
@@ -189,14 +219,7 @@ export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: bo
                     <span className="font-mono text-xs text-[#4A3828]">#{order.id.slice(-6).toUpperCase()}</span>
                     <ElapsedTime placedAt={order.placedAt} />
                   </div>
-                  <div className="space-y-1.5 rounded-xl bg-white/5 p-3">
-                    {order.items.map((item) => (
-                      <div key={item.menuItemId} className="flex items-center justify-between text-sm">
-                        <span className="text-[#D4C4B8]">{item.name}</span>
-                        <span className="rounded-md bg-white/10 px-2 py-0.5 font-mono text-sm font-bold">×{item.quantity}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <OrderItemsGrouped items={order.items} menuItems={menuItems} currency={currency} dark compact showPrices={false} />
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-[#6B5B50]">{t("items", { count: totalItems })}</span>
                     {action && (
@@ -215,6 +238,8 @@ export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: bo
             })
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

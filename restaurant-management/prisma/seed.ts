@@ -1,12 +1,41 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/lib/db";
-import { seedTenantDefaults } from "../src/lib/seed-tenant";
+import { seedTenantDefaults, seedYearSampleOrders } from "../src/lib/seed-tenant";
+
+async function backfillYearOrdersForTenant(tenantId: string) {
+  const location = await prisma.location.findFirst({
+    where: { tenantId, isActive: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (!location) return 0;
+
+  const menuItems = await prisma.menuItem.findMany({
+    where: {
+      tenantId,
+      OR: [{ locationId: null }, { locationId: location.id }],
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+  if (menuItems.length === 0) return 0;
+
+  return seedYearSampleOrders(
+    tenantId,
+    location.id,
+    menuItems.map((m) => ({ id: m.id, name: m.name, priceGrosze: m.priceGrosze, category: m.category })),
+    20,
+  );
+}
 
 async function main() {
   const email = "owner@demo.pl";
   const existing = await prisma.user.findFirst({ where: { email } });
   if (existing) {
-    console.log("Demo tenant already seeded:", email);
+    const added = await backfillYearOrdersForTenant(existing.tenantId);
+    if (added > 0) {
+      console.log(`Added ${added} year sample orders to existing demo tenant`);
+    } else {
+      console.log("Demo tenant already seeded:", email, "(year sample orders present)");
+    }
     return;
   }
 

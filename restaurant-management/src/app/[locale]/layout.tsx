@@ -45,6 +45,7 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} suppressHydrationWarning className="h-full">
       <body
+        suppressHydrationWarning
         className={`${sourceSans.variable} ${cormorant.variable} ${ibmPlexMono.variable} min-h-full antialiased`}
       >
         <ThemeProvider>

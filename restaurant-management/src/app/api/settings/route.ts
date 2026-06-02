@@ -13,19 +13,26 @@ export async function PATCH(req: Request) {
   if (contentType.includes("multipart/form-data")) {
     const form = await req.formData();
     const logo = form.get("logo");
-    if (logo instanceof File) {
-      const check = validateImageUpload(logo);
-      if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
-      const buffer = Buffer.from(await logo.arrayBuffer());
-      const colors = await extractColorsFromBuffer(buffer);
-      const base64 = `data:${logo.type};base64,${buffer.toString("base64")}`;
-      await prisma.tenant.update({
-        where: { id: session.tenantId },
-        data: { logoUrl: base64, primaryColor: colors.primary, accentColor: colors.accent },
-      });
+    if (!(logo instanceof File)) {
+      return NextResponse.json({ error: "No logo file" }, { status: 400 });
     }
+    const check = validateImageUpload(logo);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+    const buffer = Buffer.from(await logo.arrayBuffer());
+    const colors = await extractColorsFromBuffer(buffer);
+    const base64 = `data:${logo.type};base64,${buffer.toString("base64")}`;
+    await prisma.tenant.update({
+      where: { id: session.tenantId },
+      data: { logoUrl: base64, primaryColor: colors.primary, accentColor: colors.accent },
+    });
     notifyTenantUpdate(session.tenantId);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      primaryColor: colors.primary,
+      accentColor: colors.accent,
+      presets: colors.presets,
+      baseColor: colors.baseColor,
+    });
   }
 
   const body = await req.json();
@@ -49,6 +56,9 @@ export async function PATCH(req: Request) {
       defaultLocale: body.defaultLocale,
       themeMode: body.themeMode,
       menuMode: body.menuMode,
+      posEnabled: body.posEnabled,
+      posProvider: body.posProvider,
+      posEndpoint: body.posEndpoint,
     },
   });
 

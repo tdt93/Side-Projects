@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { navigateTo } from "@/lib/client-navigate";
 
 export default function LoginForm() {
   const t = useTranslations("auth");
   const locale = useLocale();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered") === "1";
   const [email, setEmail] = useState("");
@@ -31,8 +31,7 @@ export default function LoginForm() {
         setError(t("invalidCredentials"));
         return;
       }
-      router.push(`/${locale}/app/roles`);
-      router.refresh();
+      navigateTo(`/${locale}/app/roles`);
     } catch {
       setError("Network error");
     } finally {

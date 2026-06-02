@@ -17,6 +17,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       latitude: z.number().nullable().optional(),
       longitude: z.number().nullable().optional(),
       isActive: z.boolean().optional(),
+      openingHours: z.string().max(2000).optional(),
     })
     .parse(await req.json());
 

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:tunnel": "next build && next start -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -11,6 +12,7 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:configure": "node scripts/configure-db.mjs",
+    "db:test": "node scripts/test-db.mjs",
     "db:setup": "npm run db:generate && npm run db:push && npm run db:seed"
   },
   "dependencies": {

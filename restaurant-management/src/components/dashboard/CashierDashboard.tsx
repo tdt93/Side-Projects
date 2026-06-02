@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
+  CalendarClock,
   Check,
   Globe,
+  History,
   LogOut,
   Minus,
   Plus,
@@ -13,9 +15,15 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { OrderHistoryPanel } from "@/components/dashboard/OrderHistoryPanel";
+import { OrderItemsGrouped } from "@/components/dashboard/OrderItemsGrouped";
+import { AppSelect } from "@/components/ui/AppSelect";
+import { addMinutesToIso, AppDateTimePicker, formatReservationRange } from "@/components/ui/AppDateTimePicker";
 import { LocationSelector } from "@/components/layout/LocationSelector";
 import { useRestaurant } from "@/components/providers/RestaurantProvider";
 import { formatMoney, taxFromSubtotal } from "@/lib/currency";
+import { CATEGORY_I18N_KEYS } from "@/lib/menu-categories";
+import { groupItemsByCategory } from "@/lib/order-display";
 
 const TABLE_STATUS: Record<string, { bg: string; border: string; text: string }> = {
   available: { bg: "rgba(34,197,94,0.12)", border: "rgba(34,197,94,0.3)", text: "#86EFAC" },
@@ -27,21 +35,78 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
   const t = useTranslations("cashier");
   const tTable = useTranslations("tableStatus");
   const tCommon = useTranslations("common");
-  const { tenant, settings, menuItems, orders, tables, updateOrder, addOrder, payOrder } = useRestaurant();
+  const { tenant, settings, menuItems, orders, tables, reservations, updateOrder, addOrder, payOrder, addReservation, deleteReservation } = useRestaurant();
   const currency = settings?.currency ?? "PLN";
   const taxRate = (settings?.taxRateBps ?? 800) / 100;
 
-  const [tab, setTab] = useState<"tables" | "online">("tables");
-  const [selectedTable, setSelectedTable] = useState<number | null>(null);
+  const [tab, setTab] = useState<"tables" | "online" | "history">("tables");
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [showBill, setShowBill] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showReserve, setShowReserve] = useState(false);
+  const [showReservationDetails, setShowReservationDetails] = useState(true);
+  const [reserveName, setReserveName] = useState("");
+  const [reservePhone, setReservePhone] = useState("");
+  const [reserveStart, setReserveStart] = useState("");
+  const [reserveDuration, setReserveDuration] = useState("90");
+  const [reserveNotes, setReserveNotes] = useState("");
 
-  const table = tables.find((tb) => tb.number === selectedTable);
+  const table = tables.find((tb) => tb.id === selectedTableId);
   const order = table?.orderId ? orders.find((o) => o.id === table.orderId) : null;
   const onlineOrders = orders.filter((o) => ["online", "qr-menu"].includes(o.source) && o.status !== "paid");
 
+  const tableReservations = useMemo(() => {
+    if (!table) return [];
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date();
+    dayEnd.setHours(23, 59, 59, 999);
+    return reservations
+      .filter(
+        (r) =>
+          r.locationId === table.locationId &&
+          r.tableNumber === table.number &&
+          new Date(r.startsAt) <= dayEnd &&
+          new Date(r.endsAt) >= dayStart,
+      )
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  }, [reservations, table]);
+
+  const reservationCountByTable = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of reservations) {
+      const key = `${r.locationId}:${r.tableNumber}`;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [reservations]);
+
   const subtotal = order?.items.reduce((s, i) => s + i.priceGrosze * i.quantity, 0) ?? 0;
   const tax = taxFromSubtotal(subtotal, settings?.taxRateBps ?? 800);
+
+  async function handleReserve() {
+    if (!table || !reserveName.trim() || !reserveStart) return;
+    const endsAt = addMinutesToIso(reserveStart, parseInt(reserveDuration, 10));
+    await addReservation(table.number, {
+      guestName: reserveName.trim(),
+      guestPhone: reservePhone.trim() || undefined,
+      startsAt: reserveStart,
+      endsAt,
+      notes: reserveNotes.trim() || undefined,
+    });
+    setShowReserve(false);
+    setReserveName("");
+    setReservePhone("");
+    setReserveNotes("");
+    setReserveStart("");
+  }
+
+  function openReserveModal() {
+    const now = new Date();
+    now.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0);
+    setReserveStart(now.toISOString());
+    setShowReserve(true);
+  }
 
   async function handleNewOrder(tableNumber: number) {
     await addOrder({ tableNumber });
@@ -97,6 +162,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
         {[
           { id: "tables" as const, label: t("tableView"), icon: UtensilsCrossed },
           { id: "online" as const, label: t("onlineOrders", { count: onlineOrders.length }), icon: Globe },
+          { id: "history" as const, label: t("orderHistory"), icon: History },
         ].map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -128,13 +194,14 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
             <div className="grid grid-cols-3 gap-2">
               {tables.map((tb) => {
                 const st = TABLE_STATUS[tb.status] ?? TABLE_STATUS.available;
-                const isSelected = selectedTable === tb.number;
+                const isSelected = selectedTableId === tb.id;
+                const reservationCount = reservationCountByTable.get(`${tb.locationId}:${tb.number}`) ?? 0;
                 return (
                   <button
-                    key={tb.number}
+                    key={tb.id}
                     type="button"
-                    onClick={() => setSelectedTable(selectedTable === tb.number ? null : tb.number)}
-                    className="flex aspect-square flex-col items-center justify-center rounded-xl border-2 transition-all"
+                    onClick={() => setSelectedTableId(selectedTableId === tb.id ? null : tb.id)}
+                    className="interactive relative flex aspect-square flex-col items-center justify-center rounded-xl border-2"
                     style={{
                       borderColor: isSelected ? "var(--primary)" : st.border,
                       background: isSelected ? "rgba(196,98,45,0.2)" : st.bg,
@@ -144,6 +211,11 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                   >
                     <span className="font-mono text-lg font-bold">{tb.number}</span>
                     <span className="text-[0.6rem] opacity-80">{tTable(tb.status as "available" | "occupied" | "reserved")}</span>
+                    {reservationCount > 0 && (
+                      <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[0.55rem] font-bold text-white">
+                        {reservationCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -151,14 +223,19 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
           </aside>
 
           <div className="flex flex-1 flex-col bg-[#0D0805]">
-            {selectedTable ? (
+            {table ? (
               <>
                 <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
                   <div>
-                    <h3 className="font-serif text-lg">{tCommon("table", { number: selectedTable })}</h3>
+                    <h3 className="font-serif text-lg">{tCommon("table", { number: table.number })}</h3>
                     <p className="text-xs text-[#6B5B50]">{table?.status ? tTable(table.status as "available" | "occupied" | "reserved") : "—"}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {!order && (
+                      <button type="button" onClick={openReserveModal} className="interactive flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-[#D4C4B8]">
+                        <CalendarClock className="h-3.5 w-3.5" /> {t("reserveTable")}
+                      </button>
+                    )}
                     {order && (
                       <>
                         <button type="button" onClick={() => setShowAdd(true)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-[#D4C4B8]">
@@ -175,30 +252,87 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                         </button>
                       </>
                     )}
-                    {!order && table?.status === "available" && (
-                      <button type="button" onClick={() => void handleNewOrder(selectedTable)} className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
+                    {!order && table.status === "available" && (
+                      <button type="button" onClick={() => void handleNewOrder(table.number)} className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
                         {t("newOrder")}
                       </button>
                     )}
                   </div>
                 </div>
+
+                {tableReservations.length > 0 && (
+                  <div className="border-b border-white/10 px-6 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowReservationDetails((v) => !v)}
+                      className="interactive mb-2 flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wide text-[#6B5B50]"
+                    >
+                      {t("todaysReservations", { count: tableReservations.length })}
+                      <span>{showReservationDetails ? "−" : "+"}</span>
+                    </button>
+                    {showReservationDetails && (
+                      <div className="space-y-2">
+                        {tableReservations.map((res) => {
+                          const now = Date.now();
+                          const active = new Date(res.startsAt).getTime() <= now && new Date(res.endsAt).getTime() > now;
+                          return (
+                            <div
+                              key={res.id}
+                              className="rounded-xl border border-white/10 bg-[#1C1410] p-3"
+                              style={{ borderColor: active ? "rgba(59,130,246,0.35)" : undefined }}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-[#FAFAF7]">{res.guestName}</p>
+                                  <p className="text-xs text-[#93C5FD]">{formatReservationRange(res.startsAt, res.endsAt)}</p>
+                                  {res.guestPhone && <p className="text-xs text-[#6B5B50]">{res.guestPhone}</p>}
+                                  {res.notes && <p className="mt-1 text-xs text-[#A89080]">{res.notes}</p>}
+                                  {active && (
+                                    <span className="mt-1 inline-block rounded-full bg-blue-500/20 px-2 py-0.5 text-[0.6rem] font-bold text-blue-300">
+                                      {t("activeNow")}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteReservation(res.id)}
+                                  className="interactive rounded-lg p-1.5 text-[#6B5B50] hover:bg-red-500/10 hover:text-red-400"
+                                  title={t("cancelReservation")}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-auto p-6">
                   {!order?.items.length ? (
                     <div className="flex h-full items-center justify-center text-[#4A3828]">{t("selectTable")}</div>
                   ) : (
-                    order.items.map((item) => (
-                      <div key={item.menuItemId} className="mb-2 flex items-center gap-3 rounded-xl border border-white/10 bg-[#1C1410] p-3">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-[#FAFAF7]">{item.name}</p>
-                          <p className="text-xs text-[#6B5B50]">{formatMoney(item.priceGrosze, currency)}</p>
+                    <OrderItemsGrouped
+                      items={order.items}
+                      menuItems={menuItems}
+                      currency={currency}
+                      dark
+                      action={(item) => (
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => void handleQty(item.menuItemId, -1)} className="interactive rounded-lg bg-white/10 p-1 text-[#D4C4B8]">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <button type="button" onClick={() => void handleQty(item.menuItemId, 1)} className="interactive rounded-lg p-1 text-white" style={{ background: "var(--primary)" }}>
+                            <Plus className="h-3 w-3" />
+                          </button>
+                          <button type="button" onClick={() => void handleQty(item.menuItemId, -item.quantity)} className="interactive text-[#6B5B50] hover:text-red-400">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                        <button type="button" onClick={() => void handleQty(item.menuItemId, -1)} className="rounded-lg bg-white/10 p-1.5 text-[#D4C4B8]"><Minus className="h-3 w-3" /></button>
-                        <span className="min-w-6 text-center font-mono font-bold">{item.quantity}</span>
-                        <button type="button" onClick={() => void handleQty(item.menuItemId, 1)} className="rounded-lg p-1.5 text-white" style={{ background: "var(--primary)" }}><Plus className="h-3 w-3" /></button>
-                        <span className="min-w-16 text-right font-mono text-sm text-[#D4C4B8]">{formatMoney(item.priceGrosze * item.quantity, currency)}</span>
-                        <button type="button" onClick={() => void handleQty(item.menuItemId, -item.quantity)} className="text-[#6B5B50] hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
-                      </div>
-                    ))
+                      )}
+                    />
                   )}
                 </div>
                 {order && order.items.length > 0 && (
@@ -217,7 +351,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
             )}
           </div>
         </div>
-      ) : (
+      ) : tab === "online" ? (
         <div className="flex-1 overflow-auto p-6">
           {onlineOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-[#4A3828]">
@@ -268,18 +402,21 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
             ))
           )}
         </div>
+      ) : (
+        <OrderHistoryPanel menuItems={menuItems} currency={currency} dark />
       )}
 
       {showBill && order && (
         <BillModal
           order={order}
+          menuItems={menuItems}
           currency={currency}
           taxRateBps={settings?.taxRateBps ?? 800}
           onClose={() => setShowBill(false)}
           onConfirm={async (tipGrosze, method) => {
             await payOrder(order.id, { tipGrosze, method });
             setShowBill(false);
-            setSelectedTable(null);
+            setSelectedTableId(null);
           }}
         />
       )}
@@ -287,18 +424,99 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
       {showAdd && (
         <AddItemModal menuItems={menuItems.filter((m) => m.available)} currency={currency} onClose={() => setShowAdd(false)} onAdd={handleAddFromMenu} />
       )}
+
+      {showReserve && table && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-md overflow-auto rounded-2xl border border-white/10 bg-[#1C1410] p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-serif text-lg text-[#FAFAF7]">{t("reserveTable")}</h3>
+              <button type="button" onClick={() => setShowReserve(false)} className="interactive text-[#6B5B50] hover:text-[#FAFAF7]">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {tableReservations.length > 0 && (
+              <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-[#6B5B50]">{t("existingReservations")}</p>
+                <div className="space-y-2">
+                  {tableReservations.map((res) => (
+                    <p key={res.id} className="text-xs text-[#A89080]">
+                      {res.guestName} · {formatReservationRange(res.startsAt, res.endsAt)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-[#6B5B50]">{t("guestName")}</span>
+                <input
+                  value={reserveName}
+                  onChange={(e) => setReserveName(e.target.value)}
+                  className="interactive w-full rounded-2xl border border-white/10 bg-[#120D09] px-3 py-2.5 text-sm text-[#FAFAF7]"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-[#6B5B50]">{t("guestPhone")}</span>
+                <input
+                  value={reservePhone}
+                  onChange={(e) => setReservePhone(e.target.value)}
+                  className="interactive w-full rounded-2xl border border-white/10 bg-[#120D09] px-3 py-2.5 text-sm text-[#FAFAF7]"
+                />
+              </label>
+              <AppDateTimePicker
+                dark
+                label={t("startTime")}
+                value={reserveStart || new Date().toISOString()}
+                onChange={setReserveStart}
+              />
+              <AppSelect
+                label={t("duration")}
+                value={reserveDuration}
+                onChange={(e) => setReserveDuration(e.target.value)}
+                className="text-[#FAFAF7] [&_select]:border-white/10 [&_select]:bg-[#120D09] [&_select]:text-[#FAFAF7]"
+              >
+                <option value="30">{t("durationMinutes", { count: 30 })}</option>
+                <option value="60">{t("durationMinutes", { count: 60 })}</option>
+                <option value="90">{t("durationMinutes", { count: 90 })}</option>
+                <option value="120">{t("durationMinutes", { count: 120 })}</option>
+                <option value="180">{t("durationMinutes", { count: 180 })}</option>
+              </AppSelect>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-semibold uppercase text-[#6B5B50]">{t("notes")}</span>
+                <textarea
+                  value={reserveNotes}
+                  onChange={(e) => setReserveNotes(e.target.value)}
+                  rows={2}
+                  className="interactive w-full rounded-2xl border border-white/10 bg-[#120D09] px-3 py-2.5 text-sm text-[#FAFAF7]"
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={!reserveName.trim() || !reserveStart}
+              onClick={() => void handleReserve()}
+              className="interactive mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              style={{ background: "var(--primary)" }}
+            >
+              <CalendarClock className="h-4 w-4" /> {t("confirmReservation")}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function BillModal({
   order,
+  menuItems,
   currency,
   taxRateBps,
   onClose,
   onConfirm,
 }: {
-  order: { items: { name: string; quantity: number; priceGrosze: number }[] };
+  order: { items: { menuItemId: string; name: string; quantity: number; priceGrosze: number }[] };
+  menuItems: { id: string; category: string }[];
   currency: string;
   taxRateBps: number;
   onClose: () => void;
@@ -318,14 +536,7 @@ function BillModal({
           <h3 className="font-serif text-xl text-[#FAFAF7]">{t("bill")}</h3>
           <button type="button" onClick={onClose} className="text-[#6B5B50] hover:text-[#FAFAF7]"><X className="h-5 w-5" /></button>
         </div>
-        <div className="space-y-1">
-          {order.items.map((item, i) => (
-            <div key={i} className="flex justify-between text-sm text-[#D4C4B8]">
-              <span>{item.name} ×{item.quantity}</span>
-              <span className="font-mono">{formatMoney(item.priceGrosze * item.quantity, currency)}</span>
-            </div>
-          ))}
-        </div>
+        <OrderItemsGrouped items={order.items} menuItems={menuItems} currency={currency} dark compact showPrices />
         <div className="mt-4 space-y-1 border-t border-white/10 pt-3 text-sm">
           <div className="flex justify-between text-[#A89080]"><span>{t("subtotal")}</span><span className="font-mono">{formatMoney(subtotal, currency)}</span></div>
           <div className="flex justify-between text-[#A89080]"><span>{t("tax", { rate: taxRateBps / 100 })}</span><span className="font-mono">{formatMoney(tax, currency)}</span></div>
@@ -367,14 +578,26 @@ function AddItemModal({
   onClose,
   onAdd,
 }: {
-  menuItems: { id: string; name: string; priceGrosze: number }[];
+  menuItems: { id: string; name: string; priceGrosze: number; category: string }[];
   currency: string;
   onClose: () => void;
   onAdd: (id: string, qty: number) => void;
 }) {
   const t = useTranslations("cashier");
   const tCommon = useTranslations("common");
+  const tCat = useTranslations("menuCategories");
   const [qty, setQty] = useState<Record<string, number>>({});
+
+  const groups = groupItemsByCategory(
+    menuItems.map((m) => ({ menuItemId: m.id, name: m.name, quantity: 0, priceGrosze: m.priceGrosze })),
+    menuItems,
+  );
+
+  function categoryLabel(cat: string) {
+    const key = CATEGORY_I18N_KEYS[cat as keyof typeof CATEGORY_I18N_KEYS];
+    return key ? tCat(key) : cat;
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-2xl border border-white/10 bg-[#1C1410] p-4">
@@ -382,16 +605,26 @@ function AddItemModal({
           <h3 className="font-serif text-[#FAFAF7]">{tCommon("menu")}</h3>
           <button type="button" onClick={onClose} className="text-[#6B5B50]"><X className="h-5 w-5" /></button>
         </div>
-        {menuItems.map((item) => (
-          <div key={item.id} className="flex items-center justify-between border-b border-white/10 py-2 text-sm">
-            <div>
-              <p className="font-medium text-[#FAFAF7]">{item.name}</p>
-              <p className="text-xs text-[#6B5B50]">{formatMoney(item.priceGrosze, currency)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setQty((p) => ({ ...p, [item.id]: Math.max(0, (p[item.id] ?? 0) - 1) }))} className="rounded bg-white/10 p-1"><Minus className="h-3 w-3" /></button>
-              <span className="min-w-4 text-center font-mono">{qty[item.id] ?? 0}</span>
-              <button type="button" onClick={() => setQty((p) => ({ ...p, [item.id]: (p[item.id] ?? 0) + 1 }))} className="rounded p-1 text-white" style={{ background: "var(--primary)" }}><Plus className="h-3 w-3" /></button>
+        {groups.map(({ category, items }) => (
+          <div key={category} className="mb-4">
+            <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-[#6B5B50]">{categoryLabel(category)}</p>
+            <div className="space-y-1 rounded-xl bg-white/5 p-2">
+              {items.map((item) => {
+                const menuItem = menuItems.find((m) => m.id === item.menuItemId)!;
+                return (
+                  <div key={item.menuItemId} className="flex items-center justify-between border-b border-white/5 py-2 text-sm last:border-0">
+                    <div>
+                      <p className="font-medium text-[#FAFAF7]">{menuItem.name}</p>
+                      <p className="text-xs text-[#6B5B50]">{formatMoney(menuItem.priceGrosze, currency)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setQty((p) => ({ ...p, [item.menuItemId]: Math.max(0, (p[item.menuItemId] ?? 0) - 1) }))} className="interactive rounded bg-white/10 p-1"><Minus className="h-3 w-3" /></button>
+                      <span className="min-w-4 text-center font-mono">{qty[item.menuItemId] ?? 0}</span>
+                      <button type="button" onClick={() => setQty((p) => ({ ...p, [item.menuItemId]: (p[item.menuItemId] ?? 0) + 1 }))} className="interactive rounded p-1 text-white" style={{ background: "var(--primary)" }}><Plus className="h-3 w-3" /></button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}

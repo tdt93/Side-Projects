@@ -39,7 +39,7 @@ export async function GET(req: Request) {
       const heartbeat = setInterval(() => {
         if (!closed) controller.enqueue(encoder.encode(": heartbeat\n\n"));
       }, 15000);
-      const poll = setInterval(() => void push(), 2500);
+      const poll = setInterval(() => void push(), 15000);
 
       req.signal.addEventListener("abort", () => {
         closed = true;
@@ -56,6 +56,7 @@ export async function GET(req: Request) {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

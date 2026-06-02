@@ -1,9 +1,9 @@
 "use client";
 
 import { ChefHat, CreditCard, Eye, EyeOff, LayoutDashboard, LogOut, Utensils } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { navigateTo } from "@/lib/client-navigate";
 import { roleDashboardPath } from "@/lib/routes";
 
 type StaffRoleKey = "KITCHEN" | "CASHIER" | "OWNER";
@@ -12,7 +12,6 @@ export default function RoleSelectPage() {
   const t = useTranslations("auth");
   const tCommon = useTranslations("common");
   const locale = useLocale();
-  const router = useRouter();
   const [tenantName, setTenantName] = useState("RestoHub");
   const [selectedRole, setSelectedRole] = useState<StaffRoleKey | null>(null);
   const [credential, setCredential] = useState("");
@@ -27,9 +26,9 @@ export default function RoleSelectPage() {
     void fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
-        if (!data.accountId) router.replace(`/${locale}/login`);
+        if (!data.accountId) navigateTo(`/${locale}/login`);
         if (data.tenantName) setTenantName(data.tenantName);
-        if (data.staffRole) router.replace(roleDashboardPath(data.staffRole, locale));
+        if (data.staffRole) navigateTo(roleDashboardPath(data.staffRole, locale));
       });
     void fetch("/api/restaurant/data")
       .then((r) => r.json())
@@ -39,7 +38,7 @@ export default function RoleSelectPage() {
           setSelectedLocationId(data.locations[0].id);
         }
       });
-  }, [locale, router]);
+  }, [locale]);
 
   const roles = [
     {
@@ -92,8 +91,7 @@ export default function RoleSelectPage() {
       setPickLocation(true);
       return;
     }
-    router.push(roleDashboardPath(selectedRole, locale));
-    router.refresh();
+    navigateTo(roleDashboardPath(selectedRole, locale));
   }
 
   async function confirmLocation(locId: string) {
@@ -103,14 +101,13 @@ export default function RoleSelectPage() {
       body: JSON.stringify({ locationId: locId }),
     });
     if (selectedRole) {
-      router.push(roleDashboardPath(selectedRole, locale));
-      router.refresh();
+      navigateTo(roleDashboardPath(selectedRole, locale));
     }
   }
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push(`/${locale}/login`);
+    navigateTo(`/${locale}/login`);
   }
 
   const selectedRoleData = roles.find((r) => r.id === selectedRole);

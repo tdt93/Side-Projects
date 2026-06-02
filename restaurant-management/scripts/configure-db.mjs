@@ -46,9 +46,9 @@ function readExistingEnv() {
   return env;
 }
 
-function buildFromRef(projectRef, password, region = "eu-central-1") {
+function buildFromRef(projectRef, password, region = "eu-central-1", poolerPrefix = "aws-1") {
   const encoded = encodeURIComponent(password);
-  const host = `aws-0-${region}.pooler.supabase.com`;
+  const host = `${poolerPrefix}-${region}.pooler.supabase.com`;
   return {
     DATABASE_URL: `postgresql://postgres.${projectRef}:${encoded}@${host}:6543/postgres?pgbouncer=true`,
     DIRECT_URL: `postgresql://postgres.${projectRef}:${encoded}@${host}:5432/postgres`,
@@ -119,7 +119,8 @@ if (args.databaseUrl && args.directUrl) {
 Configure Supabase for restaurant-management
 
 1. Open https://supabase.com/dashboard → your project
-2. Settings → Database → copy "Connection string" (URI)
+2. Click **Connect** at the top (or Settings → Database)
+3. Copy BOTH URI strings exactly (host may be aws-0 OR aws-1):
    - Transaction pooler (6543) → DATABASE_URL
    - Session pooler (5432) → DIRECT_URL
 3. Run ONE of:
