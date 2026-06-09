@@ -14,7 +14,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   const tenant = await prisma.tenant.findUnique({ where: { id: session.tenantId } });
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const url = `${base}/${routing.defaultLocale}/menu/${tenant?.slug}/${loc.id}`;
+  const reqUrl = new URL(_req.url);
+  const tableId = reqUrl.searchParams.get("tableId");
+  const path = `${base}/${routing.defaultLocale}/${tenant?.slug}/menu`;
+  const url = tableId
+    ? `${path}?locationId=${encodeURIComponent(loc.id)}&tableId=${encodeURIComponent(tableId)}`
+    : `${path}?locationId=${encodeURIComponent(loc.id)}`;
   const png = await QRCode.toDataURL(url, { width: 400, margin: 2 });
 
   return NextResponse.json({ url, png });

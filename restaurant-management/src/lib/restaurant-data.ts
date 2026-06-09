@@ -25,10 +25,28 @@ export async function resolveLocationScope(tenantId: string, scope: DataScope) {
   });
 
   const viewAll = scope.staffRole === "OWNER" && !scope.activeLocationId;
-  const locationId =
-    scope.activeLocationId ?? (locations[0]?.id ?? null);
+  const locationId = scope.activeLocationId ?? null;
 
   return { locations, viewAll, locationId };
+}
+
+/** Resolve location for mutating APIs — explicit body id, session, or first branch. */
+export async function resolveMutationLocationId(
+  tenantId: string,
+  scope: DataScope,
+  explicitLocationId?: string | null,
+) {
+  if (explicitLocationId) {
+    const loc = await prisma.location.findFirst({
+      where: { id: explicitLocationId, tenantId, isActive: true },
+      select: { id: true },
+    });
+    if (loc) return loc.id;
+  }
+
+  const { locationId, locations } = await resolveLocationScope(tenantId, scope);
+  if (locationId) return locationId;
+  return locations[0]?.id ?? null;
 }
 
 export async function getRestaurantData(tenantId: string, scope: DataScope = {}) {
@@ -166,7 +184,9 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
       status: o.status.toLowerCase(),
       source:
         o.source === "DINE_IN" ? "dine-in" : o.source === "QR_MENU" ? "qr-menu" : "online",
+      fulfillmentType: o.fulfillmentType.toLowerCase().replace("_", "-"),
       placedAt: o.placedAt.toISOString(),
+      servedAt: o.servedAt?.toISOString(),
       customerName: o.customerName ?? undefined,
       customerPhone: o.customerPhone ?? undefined,
       items: o.items.map((i) => ({
@@ -181,9 +201,12 @@ export async function getRestaurantData(tenantId: string, scope: DataScope = {})
       id: t.id,
       locationId: t.locationId,
       number: t.number,
+      name: t.name ?? undefined,
       seats: t.seats,
       status: effectiveTableStatus(t, reservations, now),
       orderId: t.currentOrderId ?? undefined,
+      serviceRequestedAt: t.serviceRequestedAt?.toISOString(),
+      occupiedSince: t.occupiedSince?.toISOString(),
     })),
     reservations: reservations.map(mapReservation),
     locations: locations.map((l) => ({

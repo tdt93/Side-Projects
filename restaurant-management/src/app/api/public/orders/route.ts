@@ -17,6 +17,8 @@ export async function POST(req: Request) {
       .object({
         tenantSlug: z.string().min(1).max(80),
         locationId: z.string().min(1),
+        tableId: z.string().optional(),
+        fulfillmentType: z.enum(["dine-in", "delivery", "pickup"]).optional(),
         customerName: z.string().min(1).max(120),
         customerEmail: z.string().email().optional(),
         customerPhone: z.string().max(40).optional(),
@@ -50,23 +52,85 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid menu items" }, { status: 400 });
     }
 
-    const order = await prisma.order.create({
-      data: {
-        tenantId: tenant.id,
-        locationId: location.id,
-        status: "PENDING",
-        source: "QR_MENU",
-        customerName: body.customerName,
-        customerEmail: body.customerEmail,
-        customerPhone: body.customerPhone,
-        items: { create: lines },
-      },
-    });
+    const table = body.tableId
+      ? await prisma.table.findFirst({
+          where: { id: body.tableId, tenantId: tenant.id, locationId: location.id },
+          select: { id: true, number: true, currentOrderId: true },
+        })
+      : null;
+
+    const activeOrder =
+      table?.currentOrderId
+        ? await prisma.order.findFirst({
+            where: {
+              id: table.currentOrderId,
+              tenantId: tenant.id,
+              status: { notIn: ["PAID", "SERVED"] },
+            },
+            include: { items: true },
+          })
+        : null;
+
+    let orderId: string;
+
+    if (activeOrder) {
+      const merged = new Map<string, { menuItemId: string; quantity: number }>();
+      for (const item of activeOrder.items) {
+        merged.set(item.menuItemId, { menuItemId: item.menuItemId, quantity: item.quantity });
+      }
+      for (const line of lines) {
+        const existing = merged.get(line.menuItemId);
+        merged.set(line.menuItemId, {
+          menuItemId: line.menuItemId,
+          quantity: (existing?.quantity ?? 0) + line.quantity,
+        });
+      }
+      const mergedLines = await resolveOrderLines(tenant.id, [...merged.values()], location.id);
+      await prisma.orderLine.deleteMany({ where: { orderId: activeOrder.id } });
+      await prisma.orderLine.createMany({
+        data: mergedLines.map((item) => ({ ...item, orderId: activeOrder.id })),
+      });
+      orderId = activeOrder.id;
+    } else {
+      const order = await prisma.order.create({
+        data: {
+          tenantId: tenant.id,
+          locationId: location.id,
+          tableNumber: table?.number ?? null,
+          status: "PENDING",
+          source: table ? "QR_MENU" : "ONLINE",
+          fulfillmentType:
+            body.fulfillmentType === "delivery"
+              ? "DELIVERY"
+              : body.fulfillmentType === "pickup"
+                ? "PICKUP"
+                : body.fulfillmentType === "dine-in" || table
+                  ? "DINE_IN"
+                  : "PICKUP",
+          customerName: body.customerName,
+          customerEmail: body.customerEmail,
+          customerPhone: body.customerPhone,
+          items: { create: lines },
+        },
+      });
+      orderId = order.id;
+
+      if (table) {
+        await prisma.table.update({
+          where: { id: table.id },
+          data: {
+            status: "OCCUPIED",
+            currentOrderId: order.id,
+            occupiedSince: new Date(),
+          },
+        });
+      }
+    }
 
     notifyTenantUpdate(tenant.id);
 
     return NextResponse.json({
-      orderId: order.id,
+      orderId,
       status: "pending",
       message: "Order received. Pay at the counter or wait for confirmation.",
     });

@@ -42,6 +42,8 @@ export type OrderDto = {
   status: string;
   placedAt: string;
   source: string;
+  fulfillmentType?: string;
+  servedAt?: string;
   customerName?: string;
   customerPhone?: string;
 };
@@ -50,9 +52,12 @@ export type TableDto = {
   id: string;
   locationId: string;
   number: number;
+  name?: string;
   seats: number;
   status: string;
   orderId?: string;
+  serviceRequestedAt?: string;
+  occupiedSince?: string;
 };
 
 export type ReservationDto = {
@@ -141,11 +146,23 @@ type RestaurantContextType = {
   refresh: () => Promise<void>;
   setActiveLocation: (locationId: string | null) => Promise<void>;
   updateOrder: (id: string, updates: Partial<Omit<OrderDto, "items">> & { items?: OrderLineInput[] }) => Promise<void>;
-  addOrder: (order: Partial<Omit<OrderDto, "items">> & { tableNumber?: number; items?: OrderLineInput[] }) => Promise<void>;
-  updateTable: (number: number, updates: Partial<TableDto>) => Promise<void>;
+  addOrder: (
+    order: Partial<Omit<OrderDto, "items">> & { locationId?: string; tableNumber?: number; items?: OrderLineInput[] },
+  ) => Promise<void>;
+  updateTable: (
+    number: number,
+    updates: Partial<TableDto> & { requestService?: boolean; clearServiceRequest?: boolean },
+  ) => Promise<void>;
   addReservation: (
     tableNumber: number,
-    payload: { guestName: string; guestPhone?: string; startsAt: string; endsAt: string; notes?: string },
+    payload: {
+      locationId?: string;
+      guestName: string;
+      guestPhone?: string;
+      startsAt: string;
+      endsAt: string;
+      notes?: string;
+    },
   ) => Promise<void>;
   deleteReservation: (id: string) => Promise<void>;
   updateMenuItem: (id: string, updates: Partial<MenuItemDto>) => Promise<void>;
@@ -297,7 +314,9 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   );
 
   const addOrder = useCallback(
-    async (order: Partial<Omit<OrderDto, "items">> & { tableNumber?: number; items?: OrderLineInput[] }) => {
+    async (
+      order: Partial<Omit<OrderDto, "items">> & { locationId?: string; tableNumber?: number; items?: OrderLineInput[] },
+    ) => {
       await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

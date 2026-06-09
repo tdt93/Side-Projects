@@ -4,7 +4,7 @@ import { isAuthError, requireStaffSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
 import { resolveOrderLines } from "@/lib/order-lines";
-import { resolveLocationScope } from "@/lib/restaurant-data";
+import { resolveLocationScope, resolveMutationLocationId } from "@/lib/restaurant-data";
 
 const MAX_QTY_PER_LINE = 99;
 
@@ -12,17 +12,9 @@ export async function POST(req: Request) {
   const session = await requireStaffSession();
   if (isAuthError(session)) return session;
 
-  const { locationId } = await resolveLocationScope(session.tenantId, {
-    staffRole: session.staffRole,
-    activeLocationId: session.activeLocationId,
-  });
-
-  if (!locationId) {
-    return NextResponse.json({ error: "Select a location first" }, { status: 400 });
-  }
-
   const body = z
     .object({
+      locationId: z.string().optional(),
       tableNumber: z.number().int().optional(),
       source: z.enum(["dine-in", "online"]).optional(),
       items: z
@@ -37,10 +29,25 @@ export async function POST(req: Request) {
     })
     .parse(await req.json());
 
+  const { locationId } = await resolveLocationScope(session.tenantId, {
+    staffRole: session.staffRole,
+    activeLocationId: session.activeLocationId,
+  });
+
+  const resolvedLocationId = await resolveMutationLocationId(
+    session.tenantId,
+    { staffRole: session.staffRole, activeLocationId: session.activeLocationId },
+    body.locationId ?? locationId,
+  );
+
+  if (!resolvedLocationId) {
+    return NextResponse.json({ error: "Select a location first" }, { status: 400 });
+  }
+
   let lineCreates: Awaited<ReturnType<typeof resolveOrderLines>> = [];
   if (body.items?.length) {
     try {
-      lineCreates = await resolveOrderLines(session.tenantId, body.items, locationId);
+      lineCreates = await resolveOrderLines(session.tenantId, body.items, resolvedLocationId);
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid items" },
@@ -52,7 +59,7 @@ export async function POST(req: Request) {
   const order = await prisma.order.create({
     data: {
       tenantId: session.tenantId,
-      locationId,
+      locationId: resolvedLocationId,
       tableNumber: body.tableNumber ?? null,
       status: "PENDING",
       source: body.source === "online" ? "ONLINE" : "DINE_IN",
@@ -65,11 +72,16 @@ export async function POST(req: Request) {
       where: {
         tenantId_locationId_number: {
           tenantId: session.tenantId,
-          locationId,
+          locationId: resolvedLocationId,
           number: body.tableNumber,
         },
       },
-      data: { status: "OCCUPIED", currentOrderId: order.id },
+      data: {
+        status: "OCCUPIED",
+        currentOrderId: order.id,
+        occupiedSince: new Date(),
+        serviceRequestedAt: null,
+      },
     });
   }
 

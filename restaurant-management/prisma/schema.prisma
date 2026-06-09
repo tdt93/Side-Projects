@@ -27,6 +27,13 @@ enum OrderStatus {
   READY
   SERVED
   PAID
+  CANCELLED
+}
+
+enum OrderFulfillmentType {
+  DINE_IN
+  DELIVERY
+  PICKUP
 }
 
 enum TableStatus {
@@ -148,10 +155,13 @@ model Table {
   tenantId       String
   tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   locationId     String
-  number         Int
-  seats          Int
-  status         TableStatus @default(AVAILABLE)
-  currentOrderId String?
+  number              Int
+  name                String?
+  seats               Int
+  status              TableStatus @default(AVAILABLE)
+  currentOrderId      String?
+  serviceRequestedAt  DateTime?
+  occupiedSince       DateTime?
   reservedAt      DateTime?
   reservedUntil   DateTime?
   reservationName String?
@@ -202,10 +212,12 @@ model Order {
   locationId    String?
   customerId    String?
   customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  tableNumber   Int?
-  status        OrderStatus @default(PENDING)
-  source        OrderSource @default(DINE_IN)
-  placedAt      DateTime    @default(now())
+  tableNumber      Int?
+  status           OrderStatus @default(PENDING)
+  source           OrderSource @default(DINE_IN)
+  fulfillmentType  OrderFulfillmentType @default(DINE_IN)
+  placedAt         DateTime    @default(now())
+  servedAt         DateTime?
   customerName  String?
   customerPhone String?
   customerEmail String?

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Edit3, MapPin, Plus, Save, Trash2, X } from "lucide-react";
+import { Clock, Edit3, MapPin, Plus, QrCode, Save, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LayoutToggle } from "@/components/ui/LayoutToggle";
@@ -176,7 +176,7 @@ function LocationCard({
 export function LocationsSection() {
   const t = useTranslations("owner.locationsSection");
   const tCommon = useTranslations("common");
-  const { locations, addLocation, updateLocation, deleteLocation } = useRestaurant();
+  const { locations, tables, addLocation, updateLocation, deleteLocation, refresh } = useRestaurant();
   const [layout, setLayout] = useLayoutPreference("locations-layout", "grid");
   const viewLayout: "grid" | "list" = layout === "list" ? "list" : "grid";
 
@@ -185,6 +185,8 @@ export function LocationsSection() {
   const [deleteTarget, setDeleteTarget] = useState<LocationDto | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [newTable, setNewTable] = useState<Record<string, { number: string; name: string; seats: string }>>({});
+  const [busyTableId, setBusyTableId] = useState<string | null>(null);
 
   function weekdayLabel(day: (typeof WEEKDAYS)[number]) {
     return t(`weekdays.${day}`);
@@ -226,6 +228,59 @@ export function LocationsSection() {
     }
   }
 
+  async function addTable(locationId: string) {
+    const draft = newTable[locationId] ?? { number: "", name: "", seats: "4" };
+    const number = Number(draft.number);
+    const seats = Number(draft.seats || "4");
+    if (!Number.isInteger(number) || number <= 0) return;
+    setBusyTableId(`new:${locationId}`);
+    try {
+      await fetch(`/api/locations/${locationId}/tables`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ number, name: draft.name.trim() || undefined, seats }),
+      });
+      setNewTable((prev) => ({ ...prev, [locationId]: { number: "", name: "", seats: "4" } }));
+      await refresh();
+    } finally {
+      setBusyTableId(null);
+    }
+  }
+
+  async function patchTable(locationId: string, tableId: string, patch: { number?: number; name?: string | null; seats?: number }) {
+    setBusyTableId(tableId);
+    try {
+      await fetch(`/api/locations/${locationId}/tables/${tableId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      await refresh();
+    } finally {
+      setBusyTableId(null);
+    }
+  }
+
+  async function removeTable(locationId: string, tableId: string) {
+    setBusyTableId(tableId);
+    try {
+      await fetch(`/api/locations/${locationId}/tables/${tableId}`, { method: "DELETE" });
+      await refresh();
+    } finally {
+      setBusyTableId(null);
+    }
+  }
+
+  async function downloadTableQr(locationId: string, tableId: string, label: string) {
+    const res = await fetch(`/api/locations/${locationId}/qr?tableId=${encodeURIComponent(tableId)}`);
+    if (!res.ok) return;
+    const { png } = (await res.json()) as { png: string };
+    const a = document.createElement("a");
+    a.href = png;
+    a.download = `${label}-qr.png`;
+    a.click();
+  }
+
   return (
     <div className="space-y-5 p-4 sm:p-6 animate-section-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -260,6 +315,101 @@ export function LocationsSection() {
             onDelete={() => setDeleteTarget(loc)}
           />
         ))}
+      </div>
+
+      <div className="space-y-4">
+        {locations.map((loc) => {
+          const locTables = tables.filter((tb) => tb.locationId === loc.id).sort((a, b) => a.number - b.number);
+          const draft = newTable[loc.id] ?? { number: "", name: "", seats: "4" };
+          return (
+            <div key={`tables-${loc.id}`} className="dashboard-card p-4">
+              <h3 className="mb-3 text-sm font-semibold">{loc.name} — {t("tablesTitle")}</h3>
+              <div className="space-y-2">
+                {locTables.map((tb) => (
+                  <div key={tb.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 p-2">
+                    <input
+                      defaultValue={tb.number}
+                      type="number"
+                      min={1}
+                      className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                      onBlur={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isInteger(next) && next > 0 && next !== tb.number) void patchTable(loc.id, tb.id, { number: next });
+                      }}
+                    />
+                    <input
+                      defaultValue={tb.name ?? ""}
+                      placeholder={t("tableName")}
+                      className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                      onBlur={(e) => {
+                        const next = e.target.value.trim();
+                        if (next !== (tb.name ?? "")) void patchTable(loc.id, tb.id, { name: next || null });
+                      }}
+                    />
+                    <input
+                      defaultValue={tb.seats}
+                      type="number"
+                      min={1}
+                      className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                      onBlur={(e) => {
+                        const next = Number(e.target.value);
+                        if (Number.isInteger(next) && next > 0 && next !== tb.seats) void patchTable(loc.id, tb.id, { seats: next });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void downloadTableQr(loc.id, tb.id, `${loc.name}-table-${tb.number}`)}
+                      className="interactive rounded-lg bg-muted px-2 py-1 text-xs"
+                    >
+                      <QrCode className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyTableId === tb.id}
+                      onClick={() => void removeTable(loc.id, tb.id)}
+                      className="interactive rounded-lg bg-red-50 px-2 py-1 text-xs text-red-600 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  value={draft.number}
+                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, number: e.target.value } }))}
+                  placeholder={t("tableNumber")}
+                  type="number"
+                  min={1}
+                  className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                />
+                <input
+                  value={draft.name}
+                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, name: e.target.value } }))}
+                  placeholder={t("tableName")}
+                  className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                />
+                <input
+                  value={draft.seats}
+                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, seats: e.target.value } }))}
+                  placeholder={t("seats")}
+                  type="number"
+                  min={1}
+                  className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+                />
+                <button
+                  type="button"
+                  disabled={busyTableId === `new:${loc.id}` || !draft.number}
+                  onClick={() => void addTable(loc.id)}
+                  className="interactive btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+                >
+                  <Plus className="mr-1 inline h-3 w-3" />
+                  {tCommon("add")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <ConfirmDialog

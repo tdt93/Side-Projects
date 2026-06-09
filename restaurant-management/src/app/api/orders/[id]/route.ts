@@ -5,11 +5,12 @@ import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
 import { resolveOrderLines } from "@/lib/order-lines";
 
-const statusMap: Record<string, "PENDING" | "COOKING" | "READY" | "SERVED"> = {
+const statusMap: Record<string, "PENDING" | "COOKING" | "READY" | "SERVED" | "CANCELLED"> = {
   pending: "PENDING",
   cooking: "COOKING",
   ready: "READY",
   served: "SERVED",
+  cancelled: "CANCELLED",
 };
 
 const MAX_QTY_PER_LINE = 99;
@@ -30,7 +31,13 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     }
     const mapped = statusMap[next];
     if (mapped) {
-      await prisma.order.update({ where: { id }, data: { status: mapped } });
+      await prisma.order.update({
+        where: { id },
+        data: {
+          status: mapped,
+          servedAt: mapped === "SERVED" ? new Date() : undefined,
+        },
+      });
     }
   }
 

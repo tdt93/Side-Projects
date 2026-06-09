@@ -47,6 +47,7 @@ function ElapsedTime({ placedAt }: { placedAt: string }) {
 export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: boolean; onLogout?: () => void }) {
   const t = useTranslations("kitchen");
   const tOrder = useTranslations("orderStatus");
+  const tFulfillment = useTranslations("orderFulfillment");
   const tCommon = useTranslations("common");
   const { tenant, settings, menuItems, orders, updateOrder } = useRestaurant();
   const currency = settings?.currency ?? "PLN";
@@ -209,6 +210,11 @@ export function KitchenDashboard({ embedded = false, onLogout }: { embedded?: bo
                       </span>
                       {order.source === "online" && (
                         <span className="rounded bg-violet-500/20 px-2 py-0.5 text-xs font-bold text-violet-300">{t("online")}</span>
+                      )}
+                      {(order.source === "online" || order.source === "qr-menu") && order.fulfillmentType && order.fulfillmentType !== "dine-in" && (
+                        <span className="rounded bg-sky-500/20 px-2 py-0.5 text-xs font-bold text-sky-300">
+                          {tFulfillment(order.fulfillmentType as "delivery" | "pickup")}
+                        </span>
                       )}
                     </div>
                     <span className="rounded-full px-2 py-0.5 text-xs font-bold tracking-wider" style={{ background: sc.bg, color: sc.text }}>

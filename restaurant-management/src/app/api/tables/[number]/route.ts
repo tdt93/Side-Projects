@@ -41,6 +41,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ number: strin
       reservedUntil:
         body.reservedUntil === undefined ? undefined : body.reservedUntil ? new Date(body.reservedUntil) : null,
       reservationName: body.reservationName === undefined ? undefined : body.reservationName,
+      serviceRequestedAt:
+        body.clearServiceRequest === true
+          ? null
+          : body.requestService === true
+            ? new Date()
+            : undefined,
     },
   });
 

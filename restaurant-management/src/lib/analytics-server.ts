@@ -12,6 +12,8 @@ export type AnalyticsPayload = {
   peakHoursMonth: string;
   revenueByCategory: { category: string; value: number }[];
   totals: { revenue: number; orders: number; avgOrder: number };
+  revenueByFulfillment: { type: string; revenue: number; orders: number }[];
+  servedTables: number;
 };
 
 function orderRevenue(order: { items: { priceGrosze: number; quantity: number }[]; payment: { totalGrosze: number } | null }) {
@@ -124,7 +126,10 @@ export async function getAnalytics(
   const start = startDateForRange(range);
   const locationFilter = viewAll || !locationId ? {} : { locationId };
 
-  const [orders, peakHoursData] = await Promise.all([
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [orders, peakHoursData, servedTables] = await Promise.all([
     prisma.order.findMany({
       where: {
         tenantId,
@@ -138,6 +143,14 @@ export async function getAnalytics(
       orderBy: { placedAt: "asc" },
     }),
     fetchPeakHoursForCurrentMonth(tenantId, viewAll, locationId),
+    prisma.order.count({
+      where: {
+        tenantId,
+        ...locationFilter,
+        status: "SERVED",
+        servedAt: { gte: todayStart },
+      },
+    }),
   ]);
 
   const menuItems = await prisma.menuItem.findMany({
@@ -149,6 +162,7 @@ export async function getAnalytics(
   const trendMap = buildEmptyTrend(range);
   const dishMap = new Map<string, { orders: number; revenue: number }>();
   const categoryMap = new Map<string, number>();
+  const fulfillmentMap = new Map<string, { revenue: number; orders: number }>();
 
   let totalRevenue = 0;
   let paidOrderCount = 0;
@@ -179,6 +193,14 @@ export async function getAnalytics(
       trendMap.set(key, bucket);
       totalRevenue += rev;
       paidOrderCount += 1;
+
+      if (order.placedAt >= todayStart) {
+        const fKey = order.fulfillmentType.toLowerCase().replace("_", "-");
+        const fBucket = fulfillmentMap.get(fKey) ?? { revenue: 0, orders: 0 };
+        fBucket.revenue += rev;
+        fBucket.orders += 1;
+        fulfillmentMap.set(fKey, fBucket);
+      }
     }
   }
 
@@ -210,5 +232,11 @@ export async function getAnalytics(
       orders: orders.length,
       avgOrder: paidOrderCount ? Math.round(totalRevenue / paidOrderCount) : 0,
     },
+    revenueByFulfillment: [...fulfillmentMap.entries()].map(([type, v]) => ({
+      type,
+      revenue: v.revenue,
+      orders: v.orders,
+    })),
+    servedTables,
   };
 }

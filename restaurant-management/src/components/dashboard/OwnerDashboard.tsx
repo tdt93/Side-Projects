@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState, type ElementType } from "react";
 import {
-  ArrowUpRight,
   BarChart3,
   Check,
   ChefHat,
-  ChevronRight,
   DollarSign,
   Gift,
   Layers,
@@ -47,7 +45,8 @@ import { LocationsSection } from "@/components/dashboard/LocationsSection";
 import { LoyaltySection } from "@/components/dashboard/LoyaltySection";
 import { MenuSection } from "@/components/dashboard/MenuSection";
 import { SettingsPanel } from "@/components/layout/SettingsPanel";
-import { LocationSelector } from "@/components/layout/LocationSelector";
+import { OwnerDateHeader } from "@/components/dashboard/OwnerDateHeader";
+import { OwnerOverviewSection } from "@/components/dashboard/OwnerOverviewSection";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { SectionTransition } from "@/components/ui/SectionTransition";
 import { useRestaurant } from "@/components/providers/RestaurantProvider";
@@ -59,48 +58,9 @@ import { formatMoney } from "@/lib/currency";
 
 type Section = "overview" | "analytics" | "menu" | "locations" | "loyalty" | "inventory" | "qr" | "settings" | "kitchen" | "cashier";
 
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  delay = 0,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  icon: ElementType;
-  delay?: number;
-}) {
-  return (
-    <div
-      className="stat-card flex flex-col gap-3 p-5 animate-fade-in"
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      <div className="flex items-start justify-between">
-        <div className="stat-card-icon flex h-10 w-10 items-center justify-center rounded-xl">
-          <Icon className="h-5 w-5" />
-        </div>
-        <ArrowUpRight className="h-4 w-4 text-green-600" />
-      </div>
-      <div>
-        <div className="font-mono text-2xl font-bold text-foreground">{value}</div>
-        <div className="mt-0.5 text-sm text-muted-foreground">{label}</div>
-      </div>
-      <div className="text-xs font-semibold text-green-600">{sub}</div>
-    </div>
-  );
-}
-
-function orderStatusStyle(status: string) {
-  if (status === "ready") return { bg: "rgba(34,197,94,0.1)", color: "#16A34A" };
-  if (status === "cooking") return { bg: "rgba(59,130,246,0.1)", color: "#3B82F6" };
-  return { bg: "rgba(245,158,11,0.1)", color: "#D97706" };
-}
-
 export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
   const t = useTranslations("owner");
-  const tOrder = useTranslations("orderStatus");
+  const tFulfillment = useTranslations("orderFulfillment");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const {
@@ -118,7 +78,6 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [analyticsRange, setAnalyticsRange] = useState<"day" | "month" | "year">("month");
   const [analytics, setAnalytics] = useState<AnalyticsPayload | null>(null);
-  const [overviewAnalytics, setOverviewAnalytics] = useState<AnalyticsPayload | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [qrLocId, setQrLocId] = useState("");
   const [qrData, setQrData] = useState<{ url: string; png: string } | null>(null);
@@ -138,14 +97,6 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
   }, [qrLocId, section]);
 
   useEffect(() => {
-    if (section !== "overview") return;
-    void fetch("/api/analytics?range=day")
-      .then((r) => r.json())
-      .then(setOverviewAnalytics)
-      .catch(() => setOverviewAnalytics(null));
-  }, [section, activeLocationId]);
-
-  useEffect(() => {
     if (section !== "analytics") return;
     setAnalyticsLoading(true);
     void fetch(`/api/analytics?range=${analyticsRange}`)
@@ -156,13 +107,6 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
   }, [section, analyticsRange, activeLocationId]);
 
   const pendingCount = orders.filter((o) => o.status === "pending").length;
-  const activeOrders = orders.filter((o) => !["paid", "served"].includes(o.status));
-  const occupied = tables.filter((tb) => tb.status === "occupied").length;
-  const paidRevenue = orders
-    .filter((o) => o.status === "paid")
-    .reduce((s, o) => s + o.items.reduce((a, i) => a + i.priceGrosze * i.quantity, 0), 0);
-  const todayRevenue = paidRevenue + (overviewAnalytics?.trend.at(-1)?.revenue ?? 0);
-
   const analyticsTrend = analytics?.trend ?? [];
   const totalRevenue = analytics?.totals.revenue ?? 0;
   const totalOrders = analytics?.totals.orders ?? 0;
@@ -171,9 +115,6 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
   const peakHoursChart = analytics?.peakHours ?? [];
   const peakHoursMonth = analytics?.peakHoursMonth ?? "";
   const revenueByCategoryChart = analytics?.revenueByCategory ?? [];
-  const overviewTrend = overviewAnalytics?.trend.slice(-7) ?? [];
-  const overviewTopDishes = overviewAnalytics?.topDishes.slice(0, 5) ?? [];
-
   const navMain: { id: Section; label: string; icon: ElementType }[] = [
     { id: "overview", label: t("overview"), icon: LayoutDashboard },
     { id: "analytics", label: t("analytics"), icon: BarChart3 },
@@ -286,103 +227,21 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
         </div>
 
       <main className="flex-1 overflow-auto bg-[#FAFAF7] dark:bg-background">
-        {section !== "kitchen" && section !== "cashier" && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{t("ownerBreadcrumb")}</span>
-              <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
-              <span className="text-xs font-semibold text-foreground">
-                {[...navMain, ...navStaff].find((n) => n.id === section)?.label}
-              </span>
-            </div>
-            <LocationSelector compact />
-          </div>
-        )}
+        <OwnerDateHeader
+          sectionLabel={[...navMain, ...navStaff].find((n) => n.id === section)?.label}
+          showBreadcrumb={section !== "kitchen" && section !== "cashier"}
+          showLocation
+        />
 
         {section === "overview" && (
           <SectionTransition sectionKey="overview">
-          <div className="space-y-6 p-6 animate-section-in">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h1 className="font-serif text-2xl text-foreground">{t("goodAfternoon", { name: tenant?.displayName ?? "" })}</h1>
-                <p className="text-sm text-muted-foreground">
-                  {viewAllLocations ? t("dashboardSubtitleAll") : t("dashboardSubtitleBranch", { name: locations.find((l) => l.id === activeLocationId)?.name ?? "" })}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <StatCard label={t("todayRevenue")} value={formatMoney(todayRevenue, currency)} sub={t("revenueVsYesterday")} icon={DollarSign} delay={0} />
-              <StatCard label={t("activeOrders")} value={String(activeOrders.length)} sub={t("pendingCount", { count: pendingCount })} icon={ShoppingBag} delay={50} />
-              <StatCard label={t("tablesOccupied")} value={`${occupied}/${tables.length}`} sub={t("availableTables", { count: tables.filter((tb) => tb.status === "available").length })} icon={UtensilsCrossed} delay={100} />
-              <StatCard label={t("avgOrder")} value={formatMoney(overviewAnalytics?.totals.avgOrder ?? 0, currency)} sub={t("weekGrowth")} icon={TrendingUp} delay={150} />
-            </div>
-
-            <div className="dashboard-card p-5">
-              <h3 className="mb-4 text-sm font-medium text-foreground">{t("revenueLast7Days")}</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={overviewTrend}>
-                  <defs>
-                    <linearGradient id="revGradOverview" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#C4622D" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#C4622D" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(28,20,16,0.06)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#8A7060" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: "#8A7060" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(v / 100000).toFixed(1)}k`} />
-                  <Tooltip
-                    formatter={(v, name) => [
-                      name === "orders" ? Number(v ?? 0) : formatMoney(Number(v ?? 0), currency),
-                      name === "orders" ? t("totalOrders") : t("revenue"),
-                    ]}
-                    contentStyle={chartTooltipStyle}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke="#C4622D" strokeWidth={2} fill="url(#revGradOverview)" activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="orders" stroke="#3B82F6" strokeWidth={2} dot={false} yAxisId={undefined} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="dashboard-card p-5">
-                <h3 className="mb-3 text-sm font-medium">{t("topDishes")}</h3>
-                <div className="space-y-2">
-                  {overviewTopDishes.map((dish, i) => (
-                    <div key={dish.name} className="flex items-center gap-3">
-                      <span className="min-w-4 font-mono text-xs text-muted-foreground/70">#{i + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">{dish.name}</div>
-                        <div className="text-xs text-muted-foreground">{t("ordersCount", { count: dish.orders })}</div>
-                      </div>
-                      <span className="font-mono text-sm font-semibold text-primary">{formatMoney(dish.revenue, currency)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="dashboard-card p-5">
-                <h3 className="mb-3 text-sm font-medium">{t("liveOrders")}</h3>
-                <div className="space-y-2">
-                  {activeOrders.slice(0, 5).map((order) => {
-                    const st = orderStatusStyle(order.status);
-                    return (
-                      <div key={order.id} className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <span className="text-sm font-semibold">
-                            {order.tableNumber ? tCommon("table", { number: order.tableNumber }) : t("onlineOrder")}
-                          </span>
-                          <span className="ml-2 text-xs text-muted-foreground">{t("itemsCount", { count: order.items.length })}</span>
-                        </div>
-                        <span className="shrink-0 rounded-full px-2 py-0.5 text-xs font-bold uppercase" style={{ background: st.bg, color: st.color }}>
-                          {tOrder(order.status as "pending" | "cooking" | "ready" | "served" | "paid")}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
+            <OwnerOverviewSection
+              currency={currency}
+              tenantName={tenant?.displayName ?? ""}
+              viewAllLocations={viewAllLocations}
+              branchName={locations.find((l) => l.id === activeLocationId)?.name ?? ""}
+              onNavigate={navigate}
+            />
           </SectionTransition>
         )}
 
@@ -415,11 +274,12 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[
                 { label: t("totalRevenue"), val: formatMoney(totalRevenue, currency), icon: DollarSign, delay: 0 },
                 { label: t("totalOrders"), val: totalOrders.toLocaleString(), icon: ShoppingBag, delay: 50 },
                 { label: t("avgPerOrder"), val: formatMoney(avgPerOrder, currency), icon: TrendingUp, delay: 100 },
+                { label: t("servedTablesToday"), val: String(analytics?.servedTables ?? 0), icon: UtensilsCrossed, delay: 150 },
               ].map((c) => {
                 const Icon = c.icon;
                 return (
@@ -469,6 +329,19 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
                   <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} name={t("totalOrders")} />
                 </AreaChart>
               </ResponsiveContainer>
+            </div>
+
+            <div className="dashboard-card p-5">
+              <h3 className="mb-3 text-sm font-medium">{t("revenueByOrderType")}</h3>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(analytics?.revenueByFulfillment ?? []).map((row) => (
+                  <div key={row.type} className="rounded-xl bg-muted/40 px-3 py-2 text-sm">
+                    <p className="text-xs text-muted-foreground">{tFulfillment(row.type as "dine-in" | "delivery" | "pickup")}</p>
+                    <p className="font-mono font-bold">{formatMoney(row.revenue, currency)}</p>
+                    <p className="text-xs text-muted-foreground">{row.orders} {t("ordersShort")}</p>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
@@ -569,22 +442,63 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
                 ))}
               </AppSelect>
               {qrData && (
-                <div className="dashboard-card mt-5 flex flex-col items-center gap-4 p-6 text-center">
-                  <div className="rounded-2xl bg-white p-4 shadow-lg">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={qrData.png} alt={t("qrAlt")} className="h-48 w-48" />
+                <>
+                  <div className="dashboard-card mt-5 flex flex-col items-center gap-4 p-6 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("locationMenuQr")}</p>
+                    <div className="rounded-2xl bg-white p-4 shadow-lg">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={qrData.png} alt={t("qrAlt")} className="h-48 w-48" />
+                    </div>
+                    <p className="font-semibold">{locations.find((l) => l.id === qrLocId)?.name}</p>
+                    <p className="break-all font-mono text-xs text-muted-foreground">{qrData.url}</p>
+                    <div className="flex w-full flex-col gap-3 sm:flex-row">
+                      <a href={qrData.png} download="menu-qr.png" className="btn-primary flex flex-1 items-center justify-center gap-2 py-2.5 text-sm">
+                        <QrCode className="h-4 w-4" /> {t("downloadPng")}
+                      </a>
+                      <button type="button" onClick={() => window.print()} className="flex items-center justify-center gap-2 rounded-xl bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground">
+                        <Printer className="h-4 w-4" /> {t("print")}
+                      </button>
+                    </div>
                   </div>
-                  <p className="font-semibold">{locations.find((l) => l.id === qrLocId)?.name}</p>
-                  <p className="break-all font-mono text-xs text-muted-foreground">{qrData.url}</p>
-                  <div className="flex w-full flex-col gap-3 sm:flex-row">
-                    <a href={qrData.png} download="menu-qr.png" className="btn-primary flex flex-1 items-center justify-center gap-2 py-2.5 text-sm">
-                      <QrCode className="h-4 w-4" /> {t("downloadPng")}
-                    </a>
-                    <button type="button" onClick={() => window.print()} className="flex items-center justify-center gap-2 rounded-xl bg-muted px-4 py-2.5 text-sm font-semibold text-muted-foreground">
-                      <Printer className="h-4 w-4" /> {t("print")}
-                    </button>
+                  <div className="dashboard-card mt-4 p-4">
+                    <h3 className="mb-3 text-sm font-semibold">{t("tableQrCodes")}</h3>
+                    <p className="mb-3 text-xs text-muted-foreground">{t("tableQrHint")}</p>
+                    <div className="space-y-2">
+                      {tables
+                        .filter((tb) => tb.locationId === qrLocId)
+                        .sort((a, b) => a.number - b.number)
+                        .map((tb) => (
+                          <div key={tb.id} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 px-3 py-2">
+                            <div>
+                              <p className="text-sm font-medium">
+                                {tb.name ? `${tb.name} (${tCommon("table", { number: tb.number })})` : tCommon("table", { number: tb.number })}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{t("seatsCount", { count: tb.seats })}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void fetch(`/api/locations/${qrLocId}/qr?tableId=${encodeURIComponent(tb.id)}`)
+                                  .then((r) => r.json())
+                                  .then((data: { png: string }) => {
+                                    const a = document.createElement("a");
+                                    a.href = data.png;
+                                    a.download = `table-${tb.number}-qr.png`;
+                                    a.click();
+                                  });
+                              }}
+                              className="interactive flex items-center gap-1 rounded-lg bg-muted px-3 py-1.5 text-xs font-semibold"
+                            >
+                              <QrCode className="h-3.5 w-3.5" /> {t("downloadPng")}
+                            </button>
+                          </div>
+                        ))}
+                      {tables.filter((tb) => tb.locationId === qrLocId).length === 0 && (
+                        <p className="text-sm text-muted-foreground">{t("noTablesForQr")}</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -604,10 +518,14 @@ export function OwnerDashboard({ onLogout }: { onLogout: () => void }) {
         )}
 
         {section === "kitchen" && (
-          <div className="min-h-[400px] sm:min-h-[600px]"><KitchenDashboard embedded /></div>
+          <div className="min-h-[400px] sm:min-h-[600px]">
+            <KitchenDashboard embedded />
+          </div>
         )}
         {section === "cashier" && (
-          <div className="min-h-[400px] sm:min-h-[600px]"><CashierDashboard embedded /></div>
+          <div className="min-h-[400px] sm:min-h-[600px]">
+            <CashierDashboard embedded />
+          </div>
         )}
       </main>
       </div>

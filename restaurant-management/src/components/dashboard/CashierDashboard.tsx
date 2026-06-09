@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Bell,
   CalendarClock,
   Check,
   Globe,
@@ -35,7 +36,8 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
   const t = useTranslations("cashier");
   const tTable = useTranslations("tableStatus");
   const tCommon = useTranslations("common");
-  const { tenant, settings, menuItems, orders, tables, reservations, updateOrder, addOrder, payOrder, addReservation, deleteReservation } = useRestaurant();
+  const tFulfillment = useTranslations("orderFulfillment");
+  const { tenant, settings, menuItems, orders, tables, reservations, activeLocationId, viewAllLocations, updateOrder, addOrder, payOrder, addReservation, deleteReservation, updateTable } = useRestaurant();
   const currency = settings?.currency ?? "PLN";
   const taxRate = (settings?.taxRateBps ?? 800) / 100;
 
@@ -51,7 +53,27 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
   const [reserveDuration, setReserveDuration] = useState("90");
   const [reserveNotes, setReserveNotes] = useState("");
 
-  const table = tables.find((tb) => tb.id === selectedTableId);
+  const visibleTables = useMemo(() => {
+    if (activeLocationId) return tables.filter((tb) => tb.locationId === activeLocationId);
+    return tables;
+  }, [tables, activeLocationId]);
+
+  useEffect(() => {
+    setSelectedTableId(null);
+    setShowAdd(false);
+    setShowBill(false);
+  }, [activeLocationId]);
+
+  const table = visibleTables.find((tb) => tb.id === selectedTableId) ?? tables.find((tb) => tb.id === selectedTableId);
+
+  const scopedMenuItems = useMemo(() => {
+    const locId = table?.locationId ?? activeLocationId;
+    if (!locId) return menuItems.filter((m) => m.available);
+    return menuItems.filter(
+      (m) => m.available && (m.isShared || !m.locationId || m.locationId === locId),
+    );
+  }, [menuItems, table?.locationId, activeLocationId]);
+
   const order = table?.orderId ? orders.find((o) => o.id === table.orderId) : null;
   const onlineOrders = orders.filter((o) => ["online", "qr-menu"].includes(o.source) && o.status !== "paid");
 
@@ -88,6 +110,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
     if (!table || !reserveName.trim() || !reserveStart) return;
     const endsAt = addMinutesToIso(reserveStart, parseInt(reserveDuration, 10));
     await addReservation(table.number, {
+      locationId: table.locationId,
       guestName: reserveName.trim(),
       guestPhone: reservePhone.trim() || undefined,
       startsAt: reserveStart,
@@ -108,8 +131,8 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
     setShowReserve(true);
   }
 
-  async function handleNewOrder(tableNumber: number) {
-    await addOrder({ tableNumber });
+  async function handleNewOrder(tableNumber: number, locationId: string) {
+    await addOrder({ tableNumber, locationId });
   }
 
   async function handleQty(menuItemId: string, delta: number) {
@@ -192,7 +215,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
               ))}
             </div>
             <div className="grid grid-cols-3 gap-2">
-              {tables.map((tb) => {
+              {visibleTables.map((tb) => {
                 const st = TABLE_STATUS[tb.status] ?? TABLE_STATUS.available;
                 const isSelected = selectedTableId === tb.id;
                 const reservationCount = reservationCountByTable.get(`${tb.locationId}:${tb.number}`) ?? 0;
@@ -209,8 +232,14 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                       boxShadow: isSelected ? "0 0 0 2px rgba(196,98,45,0.3)" : undefined,
                     }}
                   >
-                    <span className="font-mono text-lg font-bold">{tb.number}</span>
+                    <span className="font-mono text-lg font-bold">{tb.name ?? tb.number}</span>
+                    {tb.name && <span className="text-[0.55rem] opacity-70">#{tb.number}</span>}
                     <span className="text-[0.6rem] opacity-80">{tTable(tb.status as "available" | "occupied" | "reserved")}</span>
+                    {tb.serviceRequestedAt && (
+                      <span className="absolute -left-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
+                        <Bell className="h-2.5 w-2.5" />
+                      </span>
+                    )}
                     {reservationCount > 0 && (
                       <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[0.55rem] font-bold text-white">
                         {reservationCount}
@@ -227,7 +256,9 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
               <>
                 <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
                   <div>
-                    <h3 className="font-serif text-lg">{tCommon("table", { number: table.number })}</h3>
+                    <h3 className="font-serif text-lg">
+                      {table.name ? `${table.name} (${tCommon("table", { number: table.number })})` : tCommon("table", { number: table.number })}
+                    </h3>
                     <p className="text-xs text-[#6B5B50]">{table?.status ? tTable(table.status as "available" | "occupied" | "reserved") : "—"}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -238,6 +269,14 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                     )}
                     {order && (
                       <>
+                        <button
+                          type="button"
+                          onClick={() => void updateTable(table.number, table.serviceRequestedAt ? { clearServiceRequest: true } : { requestService: true })}
+                          className="interactive flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-[#D4C4B8]"
+                        >
+                          <Bell className="h-3.5 w-3.5" />
+                          {table.serviceRequestedAt ? t("clearService") : t("callService")}
+                        </button>
                         <button type="button" onClick={() => setShowAdd(true)} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-[#D4C4B8]">
                           {t("addItem")}
                         </button>
@@ -253,7 +292,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                       </>
                     )}
                     {!order && table.status === "available" && (
-                      <button type="button" onClick={() => void handleNewOrder(table.number)} className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
+                      <button type="button" onClick={() => void handleNewOrder(table.number, table.locationId)} className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ background: "var(--primary)" }}>
                         {t("newOrder")}
                       </button>
                     )}
@@ -362,7 +401,14 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
             onlineOrders.map((o) => (
               <div key={o.id} className="mb-3 rounded-2xl border border-white/10 bg-[#1C1410] p-4">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold text-[#FAFAF7]">{o.customerName ?? tCommon("guest")}</p>
+                  <div>
+                    <p className="font-semibold text-[#FAFAF7]">{o.customerName ?? tCommon("guest")}</p>
+                    {(o.source === "online" || o.source === "qr-menu") && o.fulfillmentType && o.fulfillmentType !== "dine-in" && (
+                      <span className="mt-1 inline-block rounded-full bg-violet-500/20 px-2 py-0.5 text-[0.65rem] font-bold text-violet-300">
+                        {tFulfillment(o.fulfillmentType as "delivery" | "pickup")}
+                      </span>
+                    )}
+                  </div>
                   <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-xs font-bold text-violet-300">{tCommon("online")}</span>
                 </div>
                 <div className="mt-2 space-y-1">
@@ -422,7 +468,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
       )}
 
       {showAdd && (
-        <AddItemModal menuItems={menuItems.filter((m) => m.available)} currency={currency} onClose={() => setShowAdd(false)} onAdd={handleAddFromMenu} />
+        <AddItemModal menuItems={scopedMenuItems} currency={currency} onClose={() => setShowAdd(false)} onAdd={handleAddFromMenu} />
       )}
 
       {showReserve && table && (

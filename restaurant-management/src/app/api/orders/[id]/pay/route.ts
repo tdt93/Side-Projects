@@ -57,7 +57,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           number: order.tableNumber,
         },
       },
-      data: { status: "AVAILABLE", currentOrderId: null },
+      data: {
+        status: "AVAILABLE",
+        currentOrderId: null,
+        occupiedSince: null,
+        serviceRequestedAt: null,
+      },
     });
   }
 

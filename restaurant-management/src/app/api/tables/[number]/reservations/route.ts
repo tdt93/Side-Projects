@@ -4,7 +4,7 @@ import { isAuthError, requireStaffSession } from "@/lib/auth-guards";
 import { prisma } from "@/lib/db";
 import { notifyTenantUpdate } from "@/lib/live-broadcast";
 import { endOfDay, startOfDay } from "@/lib/order-display";
-import { resolveLocationScope } from "@/lib/restaurant-data";
+import { resolveLocationScope, resolveMutationLocationId } from "@/lib/restaurant-data";
 import { mapReservation } from "@/lib/table-reservations";
 
 export async function GET(req: Request, ctx: { params: Promise<{ number: string }> }) {
@@ -46,16 +46,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ number: string
   const { number } = await ctx.params;
   const tableNumber = parseInt(number, 10);
 
-  const { locationId } = await resolveLocationScope(session.tenantId, {
-    staffRole: session.staffRole,
-    activeLocationId: session.activeLocationId,
-  });
-  if (!locationId) {
-    return NextResponse.json({ error: "Select a location first" }, { status: 400 });
-  }
-
   const body = z
     .object({
+      locationId: z.string().optional(),
       guestName: z.string().min(1).max(120),
       guestPhone: z.string().max(40).optional(),
       startsAt: z.string().min(1),
@@ -63,6 +56,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ number: string
       notes: z.string().max(500).optional(),
     })
     .parse(await req.json());
+
+  const { locationId: scopedId } = await resolveLocationScope(session.tenantId, {
+    staffRole: session.staffRole,
+    activeLocationId: session.activeLocationId,
+  });
+  const locationId = await resolveMutationLocationId(
+    session.tenantId,
+    { staffRole: session.staffRole, activeLocationId: session.activeLocationId },
+    body.locationId ?? scopedId,
+  );
+  if (!locationId) {
+    return NextResponse.json({ error: "Select a location first" }, { status: 400 });
+  }
 
   const startsAt = new Date(body.startsAt);
   const endsAt = new Date(body.endsAt);

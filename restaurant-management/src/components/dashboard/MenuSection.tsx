@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -67,6 +67,10 @@ export function MenuSection() {
   const [deleteTarget, setDeleteTarget] = useState<MenuItemDto | null>(null);
   const [layout, setLayout] = useLayoutPreference("menu-layout", "grid");
 
+  useEffect(() => {
+    if (activeLocationId) setItemScope(activeLocationId);
+  }, [activeLocationId]);
+
   const categoryNames =
     dbCategories.length > 0
       ? dbCategories.map((c) => c.name)
@@ -99,7 +103,13 @@ export function MenuSection() {
   function openAdd() {
     setEditingItem(null);
     setForm(emptyForm);
-    setItemScope(activeLocationId ?? "shared");
+    if (activeLocationId) {
+      setItemScope(activeLocationId);
+    } else if (locationFilter !== "all" && locationFilter !== "shared") {
+      setItemScope(locationFilter);
+    } else {
+      setItemScope("shared");
+    }
     setImageFile(null);
     setImagePreview(null);
     setModalOpen(true);

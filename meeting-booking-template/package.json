@@ -8,7 +8,7 @@
     "build": "next build --turbopack",
     "build:webpack": "next build --webpack",
     "build:hosting": "node scripts/build-hosting.js",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0",
     "lint": "eslint",
     "db:generate": "node scripts/postinstall-prisma.js",
     "db:migrate": "prisma migrate dev",

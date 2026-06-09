@@ -13,6 +13,8 @@ export type SessionData = {
   staffRole?: StaffRole;
   /** null = owner viewing all locations; set = scoped to one branch */
   activeLocationId?: string | null;
+  /** Platform super-admin (management subdomain) */
+  platformAdmin?: boolean;
 };
 
 const DEV_FALLBACK = "dev-restaurant-session-secret-key-32";
