@@ -90,8 +90,8 @@ const PARTNER_LABEL_FIELD = stripEnvQuotes(process.env.AIRTABLE_PARTNER_LABEL_FI
 // AIRTABLE_LIST_VIEW_FIELDS
 //   Comma-separated Airtable field NAMES exactly as in the base.
 //   Order must match these fixed UI keys (for translations):
-//     1 fullname  2 dob  3 passportNr  4 case  5 documentSubmittedDate
-//     6 fingerprintDate  7 decisionExpectedDate  8 collectionCardDate
+//     1 fullname  2 dob  3 passportNr  4 case  5 fingerprintDate
+//     6 documentSubmittedDate  7 decisionExpectedDate  8 collectionCardDate
 //   Example:
 //     AIRTABLE_LIST_VIEW_FIELDS=Fullname,Date of birth,Passport nr.,Fingerprint-date,...
 // =============================================================================
@@ -101,8 +101,8 @@ const LIST_VIEW_KEYS = [
   "dob",
   "passportNr",
   "case",
-  "documentSubmittedDate",
   "fingerprintDate",
+  "documentSubmittedDate",
   "decisionExpectedDate",
   "collectionCardDate",
 ];

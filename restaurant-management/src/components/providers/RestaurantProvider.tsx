@@ -151,7 +151,7 @@ type RestaurantContextType = {
   ) => Promise<void>;
   updateTable: (
     number: number,
-    updates: Partial<TableDto> & { requestService?: boolean; clearServiceRequest?: boolean },
+    updates: Partial<TableDto> & { locationId?: string; requestService?: boolean; clearServiceRequest?: boolean },
   ) => Promise<void>;
   addReservation: (
     tableNumber: number,
@@ -213,7 +213,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   const [staffRole, setStaffRole] = useState<StaffRole | undefined>();
   const [loading, setLoading] = useState(true);
 
-  const applyPayload = useCallback((data: Payload) => {
+  const applyDataUpdate = useCallback((data: Payload) => {
     setTenant(data.tenant);
     setSettings(data.settings);
     setMenuItems(data.menuItems);
@@ -224,10 +224,17 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
     setCategories(data.categories ?? []);
     setCustomers(data.customers ?? []);
     setInventoryItems(data.inventoryItems ?? []);
-    setActiveLocationIdState(data.activeLocationId ?? null);
-    setViewAllLocations(Boolean(data.viewAllLocations));
     setLoading(false);
   }, []);
+
+  const applyPayload = useCallback(
+    (data: Payload) => {
+      applyDataUpdate(data);
+      setActiveLocationIdState(data.activeLocationId ?? null);
+      setViewAllLocations(Boolean(data.viewAllLocations));
+    },
+    [applyDataUpdate],
+  );
 
   const refresh = useCallback(async () => {
     const [dataRes, sessionRes] = await Promise.all([
@@ -253,6 +260,8 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
 
   const setActiveLocation = useCallback(
     async (locationId: string | null) => {
+      setActiveLocationIdState(locationId);
+      setViewAllLocations(staffRole === "OWNER" && locationId === null);
       await fetch("/api/restaurant/data", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -260,24 +269,30 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       });
       await refresh();
     },
-    [refresh],
+    [refresh, staffRole],
   );
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
 
+  useEffect(() => {
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let closed = false;
 
     const connect = () => {
       if (closed) return;
-      es = new EventSource("/api/restaurant/stream");
+      const params = new URLSearchParams();
+      if (viewAllLocations) params.set("viewAll", "1");
+      else if (activeLocationId) params.set("locationId", activeLocationId);
+      const qs = params.toString();
+      es = new EventSource(qs ? `/api/restaurant/stream?${qs}` : "/api/restaurant/stream");
 
       es.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as { type: string; payload: Payload };
-          if (msg.type === "update") applyPayload(msg.payload);
+          if (msg.type === "update") applyDataUpdate(msg.payload);
         } catch {
           /* ignore malformed events */
         }
@@ -299,7 +314,7 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
       if (reconnectTimer) clearTimeout(reconnectTimer);
       es?.close();
     };
-  }, [refresh, applyPayload]);
+  }, [applyDataUpdate, activeLocationId, viewAllLocations]);
 
   const updateOrder = useCallback(
     async (id: string, updates: Partial<Omit<OrderDto, "items">> & { items?: OrderLineInput[] }) => {
@@ -328,7 +343,10 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   );
 
   const updateTable = useCallback(
-    async (number: number, updates: Partial<TableDto>) => {
+    async (
+      number: number,
+      updates: Partial<TableDto> & { locationId?: string; clearServiceRequest?: boolean; requestService?: boolean },
+    ) => {
       await fetch(`/api/tables/${number}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -342,7 +360,14 @@ export function RestaurantProvider({ children }: { children: React.ReactNode }) 
   const addReservation = useCallback(
     async (
       tableNumber: number,
-      payload: { guestName: string; guestPhone?: string; startsAt: string; endsAt: string; notes?: string },
+      payload: {
+        locationId?: string;
+        guestName: string;
+        guestPhone?: string;
+        startsAt: string;
+        endsAt: string;
+        notes?: string;
+      },
     ) => {
       await fetch(`/api/tables/${tableNumber}/reservations`, {
         method: "POST",

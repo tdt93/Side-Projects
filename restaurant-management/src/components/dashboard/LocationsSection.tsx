@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Edit3, MapPin, Plus, QrCode, Save, Trash2, X } from "lucide-react";
+import { Clock, Edit3, MapPin, Plus, QrCode, Save, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LayoutToggle } from "@/components/ui/LayoutToggle";
-import { useRestaurant, type LocationDto } from "@/components/providers/RestaurantProvider";
+import { SlideInPanel } from "@/components/ui/SlideInPanel";
+import { useRestaurant, type LocationDto, type TableDto } from "@/components/providers/RestaurantProvider";
 import { useLayoutPreference } from "@/hooks/use-layout-preference";
 import {
   DEFAULT_OPENING_HOURS,
@@ -41,24 +42,155 @@ const emptyForm: FormState = {
   openingHours: { ...DEFAULT_OPENING_HOURS },
 };
 
+function LocationTablesBlock({
+  loc,
+  locTables,
+  draft,
+  busyTableId,
+  t,
+  tCommon,
+  onDraftChange,
+  onAddTable,
+  onPatchTable,
+  onRemoveTable,
+  onDownloadQr,
+}: {
+  loc: LocationDto;
+  locTables: TableDto[];
+  draft: { number: string; name: string; seats: string };
+  busyTableId: string | null;
+  t: (key: string, values?: Record<string, string | number>) => string;
+  tCommon: (key: string) => string;
+  onDraftChange: (patch: Partial<{ number: string; name: string; seats: string }>) => void;
+  onAddTable: () => void;
+  onPatchTable: (tableId: string, patch: { number?: number; name?: string | null; seats?: number }) => void;
+  onRemoveTable: (tableId: string) => void;
+  onDownloadQr: (tableId: string, label: string) => void;
+}) {
+  return (
+    <div className="mt-3 border-t border-border/60 pt-3">
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("tablesTitle")}</h4>
+      <div className="space-y-2">
+        {locTables.map((tb) => (
+          <div key={tb.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 p-2">
+            <input
+              defaultValue={tb.number}
+              type="number"
+              min={1}
+              className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              onBlur={(e) => {
+                const next = Number(e.target.value);
+                if (Number.isInteger(next) && next > 0 && next !== tb.number) onPatchTable(tb.id, { number: next });
+              }}
+            />
+            <input
+              defaultValue={tb.name ?? ""}
+              placeholder={t("tableName")}
+              className="min-w-32 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              onBlur={(e) => {
+                const next = e.target.value.trim();
+                if (next !== (tb.name ?? "")) onPatchTable(tb.id, { name: next || null });
+              }}
+            />
+            <input
+              defaultValue={tb.seats}
+              type="number"
+              min={1}
+              className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+              onBlur={(e) => {
+                const next = Number(e.target.value);
+                if (Number.isInteger(next) && next > 0 && next !== tb.seats) onPatchTable(tb.id, { seats: next });
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => onDownloadQr(tb.id, `${loc.name}-table-${tb.number}`)}
+              className="interactive rounded-lg bg-muted px-2 py-1 text-xs"
+            >
+              <QrCode className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={busyTableId === tb.id}
+              onClick={() => onRemoveTable(tb.id)}
+              className="interactive rounded-lg bg-red-50 px-2 py-1 text-xs text-red-600 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          value={draft.number}
+          onChange={(e) => onDraftChange({ number: e.target.value })}
+          placeholder={t("tableNumber")}
+          type="number"
+          min={1}
+          className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+        />
+        <input
+          value={draft.name}
+          onChange={(e) => onDraftChange({ name: e.target.value })}
+          placeholder={t("tableName")}
+          className="min-w-32 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+        />
+        <input
+          value={draft.seats}
+          onChange={(e) => onDraftChange({ seats: e.target.value })}
+          placeholder={t("seats")}
+          type="number"
+          min={1}
+          className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
+        />
+        <button
+          type="button"
+          disabled={busyTableId === `new:${loc.id}` || !draft.number}
+          onClick={onAddTable}
+          className="interactive btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
+        >
+          <Plus className="mr-1 inline h-3 w-3" />
+          {tCommon("add")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function LocationCard({
   loc,
   layout,
   index,
+  locTables,
+  tableDraft,
+  busyTableId,
   t,
   tCommon,
   weekdayLabel,
   onEdit,
   onDelete,
+  onTableDraftChange,
+  onAddTable,
+  onPatchTable,
+  onRemoveTable,
+  onDownloadQr,
 }: {
   loc: LocationDto;
   layout: "grid" | "list";
   index: number;
+  locTables: TableDto[];
+  tableDraft: { number: string; name: string; seats: string };
+  busyTableId: string | null;
   t: (key: string, values?: Record<string, string | number>) => string;
   tCommon: (key: string) => string;
   weekdayLabel: (day: (typeof WEEKDAYS)[number]) => string;
   onEdit: () => void;
   onDelete: () => void;
+  onTableDraftChange: (patch: Partial<{ number: string; name: string; seats: string }>) => void;
+  onAddTable: () => void;
+  onPatchTable: (tableId: string, patch: { number?: number; name?: string | null; seats?: number }) => void;
+  onRemoveTable: (tableId: string) => void;
+  onDownloadQr: (tableId: string, label: string) => void;
 }) {
   const hours = parseOpeningHours(loc.openingHours);
   const todayKey = WEEKDAYS[(new Date().getDay() + 6) % 7]!;
@@ -147,6 +279,19 @@ function LocationCard({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
+      <LocationTablesBlock
+        loc={loc}
+        locTables={locTables}
+        draft={tableDraft}
+        busyTableId={busyTableId}
+        t={t}
+        tCommon={tCommon}
+        onDraftChange={onTableDraftChange}
+        onAddTable={onAddTable}
+        onPatchTable={onPatchTable}
+        onRemoveTable={onRemoveTable}
+        onDownloadQr={onDownloadQr}
+      />
     </div>
   );
 
@@ -302,112 +447,31 @@ export function LocationsSection() {
       </div>
 
       <div className={viewLayout === "grid" ? "grid gap-3 sm:grid-cols-2" : "flex flex-col gap-3"}>
-        {locations.map((loc, index) => (
-          <LocationCard
-            key={loc.id}
-            loc={loc}
-            layout={viewLayout}
-            index={index}
-            t={t}
-            tCommon={tCommon}
-            weekdayLabel={weekdayLabel}
-            onEdit={() => openEdit(loc)}
-            onDelete={() => setDeleteTarget(loc)}
-          />
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        {locations.map((loc) => {
+        {locations.map((loc, index) => {
           const locTables = tables.filter((tb) => tb.locationId === loc.id).sort((a, b) => a.number - b.number);
           const draft = newTable[loc.id] ?? { number: "", name: "", seats: "4" };
           return (
-            <div key={`tables-${loc.id}`} className="dashboard-card p-4">
-              <h3 className="mb-3 text-sm font-semibold">{loc.name} — {t("tablesTitle")}</h3>
-              <div className="space-y-2">
-                {locTables.map((tb) => (
-                  <div key={tb.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 p-2">
-                    <input
-                      defaultValue={tb.number}
-                      type="number"
-                      min={1}
-                      className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                      onBlur={(e) => {
-                        const next = Number(e.target.value);
-                        if (Number.isInteger(next) && next > 0 && next !== tb.number) void patchTable(loc.id, tb.id, { number: next });
-                      }}
-                    />
-                    <input
-                      defaultValue={tb.name ?? ""}
-                      placeholder={t("tableName")}
-                      className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                      onBlur={(e) => {
-                        const next = e.target.value.trim();
-                        if (next !== (tb.name ?? "")) void patchTable(loc.id, tb.id, { name: next || null });
-                      }}
-                    />
-                    <input
-                      defaultValue={tb.seats}
-                      type="number"
-                      min={1}
-                      className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                      onBlur={(e) => {
-                        const next = Number(e.target.value);
-                        if (Number.isInteger(next) && next > 0 && next !== tb.seats) void patchTable(loc.id, tb.id, { seats: next });
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void downloadTableQr(loc.id, tb.id, `${loc.name}-table-${tb.number}`)}
-                      className="interactive rounded-lg bg-muted px-2 py-1 text-xs"
-                    >
-                      <QrCode className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busyTableId === tb.id}
-                      onClick={() => void removeTable(loc.id, tb.id)}
-                      className="interactive rounded-lg bg-red-50 px-2 py-1 text-xs text-red-600 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input
-                  value={draft.number}
-                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, number: e.target.value } }))}
-                  placeholder={t("tableNumber")}
-                  type="number"
-                  min={1}
-                  className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                />
-                <input
-                  value={draft.name}
-                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, name: e.target.value } }))}
-                  placeholder={t("tableName")}
-                  className="min-w-40 flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                />
-                <input
-                  value={draft.seats}
-                  onChange={(e) => setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, seats: e.target.value } }))}
-                  placeholder={t("seats")}
-                  type="number"
-                  min={1}
-                  className="w-16 rounded-lg border border-border bg-background px-2 py-1 text-xs"
-                />
-                <button
-                  type="button"
-                  disabled={busyTableId === `new:${loc.id}` || !draft.number}
-                  onClick={() => void addTable(loc.id)}
-                  className="interactive btn-primary px-3 py-1.5 text-xs disabled:opacity-50"
-                >
-                  <Plus className="mr-1 inline h-3 w-3" />
-                  {tCommon("add")}
-                </button>
-              </div>
-            </div>
+            <LocationCard
+              key={loc.id}
+              loc={loc}
+              layout={viewLayout}
+              index={index}
+              locTables={locTables}
+              tableDraft={draft}
+              busyTableId={busyTableId}
+              t={t}
+              tCommon={tCommon}
+              weekdayLabel={weekdayLabel}
+              onEdit={() => openEdit(loc)}
+              onDelete={() => setDeleteTarget(loc)}
+              onTableDraftChange={(patch) =>
+                setNewTable((prev) => ({ ...prev, [loc.id]: { ...draft, ...patch } }))
+              }
+              onAddTable={() => void addTable(loc.id)}
+              onPatchTable={(tableId, patch) => void patchTable(loc.id, tableId, patch)}
+              onRemoveTable={(tableId) => void removeTable(loc.id, tableId)}
+              onDownloadQr={(tableId, label) => void downloadTableQr(loc.id, tableId, label)}
+            />
           );
         })}
       </div>
@@ -423,83 +487,80 @@ export function LocationsSection() {
         }}
       />
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center animate-fade-in">
-          <div className="max-h-[92vh] w-full max-w-md overflow-auto rounded-2xl bg-card p-5 shadow-xl animate-section-in">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-serif text-xl">{editing ? t("editLocation") : t("addLocation")}</h2>
-              <button type="button" onClick={() => setModalOpen(false)} className="interactive rounded-lg p-1 hover:bg-muted">
-                <X className="h-5 w-5" />
-              </button>
+      <SlideInPanel
+        open={modalOpen}
+        title={editing ? t("editLocation") : t("addLocation")}
+        onClose={() => setModalOpen(false)}
+        wide
+        footer={
+          <button
+            type="button"
+            disabled={saving || !form.name.trim()}
+            onClick={() => void save()}
+            className="interactive btn-primary flex w-full items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-50"
+          >
+            <Save className="h-4 w-4" /> {tCommon("save")}
+          </button>
+        }
+      >
+        <div className="space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("name")}</span>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("address")}</span>
+            <textarea
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              rows={2}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("phone")}</span>
+            <input
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
+            />
+          </label>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{t("openingHours")}</p>
+            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+              {WEEKDAYS.map((day) => (
+                <label key={day} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="w-24 text-xs font-medium">{weekdayLabel(day)}</span>
+                  <input
+                    value={form.openingHours[day]}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        openingHours: { ...form.openingHours, [day]: e.target.value },
+                      })
+                    }
+                    placeholder="09:00-22:00"
+                    className="flex-1 rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs"
+                  />
+                </label>
+              ))}
             </div>
-            <div className="space-y-3">
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("name")}</span>
-                <input
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("address")}</span>
-                <textarea
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">{t("phone")}</span>
-                <input
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 transition-colors focus:border-primary/40"
-                />
-              </label>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">{t("openingHours")}</p>
-                <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
-                  {WEEKDAYS.map((day) => (
-                    <label key={day} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="w-24 text-xs font-medium">{weekdayLabel(day)}</span>
-                      <input
-                        value={form.openingHours[day]}
-                        onChange={(e) =>
-                          setForm({
-                            ...form,
-                            openingHours: { ...form.openingHours, [day]: e.target.value },
-                          })
-                        }
-                        placeholder="09:00-22:00"
-                        className="flex-1 rounded-lg border border-border bg-background px-2 py-1.5 font-mono text-xs"
-                      />
-                    </label>
-                  ))}
-                </div>
-                <p className="mt-1 text-[0.65rem] text-muted-foreground">{t("openingHoursHint")}</p>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                />
-                {t("active")}
-              </label>
-            </div>
-            <button
-              type="button"
-              disabled={saving || !form.name.trim()}
-              onClick={() => void save()}
-              className="interactive btn-primary mt-5 flex w-full items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" /> {tCommon("save")}
-            </button>
+            <p className="mt-1 text-[0.65rem] text-muted-foreground">{t("openingHoursHint")}</p>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+            />
+            {t("active")}
+          </label>
         </div>
-      )}
+      </SlideInPanel>
     </div>
   );
 }

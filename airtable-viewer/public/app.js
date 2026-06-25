@@ -73,7 +73,7 @@ let listColumns = [];
 /** @type {"cases" | "clients"} */
 let listViewMode = "cases";
 
-const CASE_SORT_KEYS = ["documentSubmittedDate", "fingerprintDate", "decisionExpectedDate", "collectionCardDate"];
+const CASE_SORT_KEYS = ["fingerprintDate", "documentSubmittedDate", "decisionExpectedDate", "collectionCardDate"];
 const CLIENT_SORT_KEYS = ["fullname", "dob", "passportNr", "cardExpiredDate"];
 
 let page = 1;
@@ -516,7 +516,7 @@ function renderCaseCards(pageRecords) {
         <span class="case-card__k">${escapeHtml(columnHeader("case"))}</span>
         <span class="case-card__v case-card__v--case">${escapeHtml(cellValueForKey(r, "case"))}</span>
       </div>`;
-      const g1 = caseCardKv("documentSubmittedDate", r) + caseCardKv("fingerprintDate", r);
+      const g1 = caseCardKv("fingerprintDate", r) + caseCardKv("documentSubmittedDate", r);
       const g2 = caseCardKv("decisionExpectedDate", r) + caseCardKv("collectionCardDate", r);
       const chk = checklistStyleSuffix(r);
       const cardClass = chk ? `case-card case-card--${chk}` : "case-card";

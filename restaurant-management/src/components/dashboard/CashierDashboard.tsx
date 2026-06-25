@@ -59,10 +59,12 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
   }, [tables, activeLocationId]);
 
   useEffect(() => {
-    setSelectedTableId(null);
-    setShowAdd(false);
-    setShowBill(false);
-  }, [activeLocationId]);
+    if (selectedTableId && !visibleTables.some((tb) => tb.id === selectedTableId)) {
+      setSelectedTableId(null);
+      setShowAdd(false);
+      setShowBill(false);
+    }
+  }, [activeLocationId, visibleTables, selectedTableId]);
 
   const table = visibleTables.find((tb) => tb.id === selectedTableId) ?? tables.find((tb) => tb.id === selectedTableId);
 
@@ -271,7 +273,7 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                       <>
                         <button
                           type="button"
-                          onClick={() => void updateTable(table.number, table.serviceRequestedAt ? { clearServiceRequest: true } : { requestService: true })}
+                          onClick={() => void updateTable(table.number, table.serviceRequestedAt ? { locationId: table.locationId, clearServiceRequest: true } : { locationId: table.locationId, requestService: true })}
                           className="interactive flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-[#D4C4B8]"
                         >
                           <Bell className="h-3.5 w-3.5" />
@@ -412,8 +414,8 @@ export function CashierDashboard({ embedded = false, onLogout }: { embedded?: bo
                   <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-xs font-bold text-violet-300">{tCommon("online")}</span>
                 </div>
                 <div className="mt-2 space-y-1">
-                  {o.items.map((i) => (
-                    <div key={i.menuItemId} className="flex justify-between text-sm text-[#D4C4B8]">
+                  {o.items.map((i, idx) => (
+                    <div key={`${i.menuItemId}-${idx}`} className="flex justify-between text-sm text-[#D4C4B8]">
                       <span>{i.name} ×{i.quantity}</span>
                       <span className="font-mono">{formatMoney(i.priceGrosze * i.quantity, currency)}</span>
                     </div>

@@ -11,11 +11,11 @@ import {
   ToggleRight,
   Trash2,
   Upload,
-  X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { LayoutToggle } from "@/components/ui/LayoutToggle";
+import { SlideInPanel } from "@/components/ui/SlideInPanel";
 import { AppSelect } from "@/components/ui/AppSelect";
 import { useRestaurant, type MenuItemDto } from "@/components/providers/RestaurantProvider";
 import { useLayoutPreference } from "@/hooks/use-layout-preference";
@@ -463,122 +463,119 @@ export function MenuSection() {
         }}
       />
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="max-h-[92vh] w-full max-w-lg overflow-auto rounded-t-2xl bg-card shadow-2xl sm:rounded-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-5 py-4">
-              <h3 className="font-serif text-lg">{editingItem ? t("editItem") : t("addItem")}</h3>
-              <button type="button" onClick={() => setModalOpen(false)}><X className="h-5 w-5 text-muted-foreground" /></button>
-            </div>
-
-            <div className="space-y-4 px-5 py-4">
-              <div
-                className={`relative mx-auto w-full max-w-[200px] overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted ${
-                  form.imageAspectRatio === "3:4" ? "aspect-[3/4]" : "aspect-square"
-                }`}
-              >
-                {imagePreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={imagePreview} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground"
-                  >
-                    <Upload className="h-8 w-8 opacity-40" />
-                    <span className="px-4 text-center text-xs">{t("uploadHint")}</span>
-                  </button>
-                )}
-                {imagePreview && (
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="absolute bottom-2 right-2 rounded-lg bg-black/60 p-1.5 text-white"
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null)} />
-              </div>
-
-              <div className="flex justify-center gap-2">
-                {(["1:1", "3:4"] as const).map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, imageAspectRatio: ratio }))}
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-                    style={{
-                      background: form.imageAspectRatio === ratio ? "var(--primary)" : "var(--muted)",
-                      color: form.imageAspectRatio === ratio ? "#fff" : undefined,
-                    }}
-                  >
-                    {ratio === "1:1" ? t("ratioSquare") : t("ratioPortrait")}
-                  </button>
-                ))}
-              </div>
-              <p className="text-center text-[0.65rem] text-muted-foreground">{t("compressNote")}</p>
-
-              {(["name", "price", "description"] as const).map((key) => (
-                <div key={key}>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {t(key)}
-                  </label>
-                  <input
-                    type={key === "price" ? "number" : "text"}
-                    value={form[key]}
-                    onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-sm outline-none"
-                    placeholder={key === "price" ? `0.00 ${currency}` : undefined}
-                  />
-                </div>
-              ))}
-
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("category")}</label>
-                <AppSelect value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}>
-                  {categoryNames.map((c) => (
-                    <option key={c} value={c}>{categoryLabel(c)}</option>
-                  ))}
-                </AppSelect>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.isCombo} onChange={(e) => setForm((p) => ({ ...p, isCombo: e.target.checked }))} />
-                {t("combo")}
-              </label>
-
-              {!editingItem && locations.length > 0 && (
-                <AppSelect
-                  label={t("scopeShared")}
-                  value={itemScope}
-                  onChange={(e) => setItemScope(e.target.value)}
-                >
-                  <option value="shared">{t("scopeShared")}</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>{t("scopeBranch")}: {l.name}</option>
-                  ))}
-                </AppSelect>
-              )}
-            </div>
-
-            <div className="sticky bottom-0 flex gap-3 border-t border-border bg-card px-5 py-4">
-              <button type="button" onClick={() => setModalOpen(false)} className="flex-1 rounded-xl bg-muted py-2.5 text-sm font-semibold">
-                {tCommon("cancel")}
-              </button>
+      <SlideInPanel
+        open={modalOpen}
+        title={editingItem ? t("editItem") : t("addItem")}
+        onClose={() => setModalOpen(false)}
+        wide
+        footer={
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setModalOpen(false)} className="flex-1 rounded-xl bg-muted py-2.5 text-sm font-semibold">
+              {tCommon("cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={saving || !form.name || !form.price}
+              onClick={() => void handleSave()}
+              className="btn-primary flex flex-1 items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-50"
+            >
+              {saving ? tCommon("loading") : <><Check className="h-4 w-4" /> {tCommon("save")}</>}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div
+            className={`relative mx-auto w-full max-w-[200px] overflow-hidden rounded-xl border-2 border-dashed border-border bg-muted ${
+              form.imageAspectRatio === "3:4" ? "aspect-[3/4]" : "aspect-square"
+            }`}
+          >
+            {imagePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreview} alt="" className="h-full w-full object-cover" />
+            ) : (
               <button
                 type="button"
-                disabled={saving || !form.name || !form.price}
-                onClick={() => void handleSave()}
-                className="btn-primary flex flex-1 items-center justify-center gap-2 py-2.5 text-sm disabled:opacity-50"
+                onClick={() => fileRef.current?.click()}
+                className="flex h-full w-full flex-col items-center justify-center gap-2 text-muted-foreground"
               >
-                {saving ? tCommon("loading") : <><Check className="h-4 w-4" /> {tCommon("save")}</>}
+                <Upload className="h-8 w-8 opacity-40" />
+                <span className="px-4 text-center text-xs">{t("uploadHint")}</span>
               </button>
-            </div>
+            )}
+            {imagePreview && (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="absolute bottom-2 right-2 rounded-lg bg-black/60 p-1.5 text-white"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e.target.files?.[0] ?? null)} />
           </div>
+
+          <div className="flex justify-center gap-2">
+            {(["1:1", "3:4"] as const).map((ratio) => (
+              <button
+                key={ratio}
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, imageAspectRatio: ratio }))}
+                className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+                style={{
+                  background: form.imageAspectRatio === ratio ? "var(--primary)" : "var(--muted)",
+                  color: form.imageAspectRatio === ratio ? "#fff" : undefined,
+                }}
+              >
+                {ratio === "1:1" ? t("ratioSquare") : t("ratioPortrait")}
+              </button>
+            ))}
+          </div>
+          <p className="text-center text-[0.65rem] text-muted-foreground">{t("compressNote")}</p>
+
+          {(["name", "price", "description"] as const).map((key) => (
+            <div key={key}>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t(key)}
+              </label>
+              <input
+                type={key === "price" ? "number" : "text"}
+                value={form[key]}
+                onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+                className="w-full rounded-xl border border-border bg-muted px-3 py-2.5 text-sm outline-none"
+                placeholder={key === "price" ? `0.00 ${currency}` : undefined}
+              />
+            </div>
+          ))}
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("category")}</label>
+            <AppSelect value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}>
+              {categoryNames.map((c) => (
+                <option key={c} value={c}>{categoryLabel(c)}</option>
+              ))}
+            </AppSelect>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={form.isCombo} onChange={(e) => setForm((p) => ({ ...p, isCombo: e.target.checked }))} />
+            {t("combo")}
+          </label>
+
+          {!editingItem && locations.length > 0 && (
+            <AppSelect
+              label={t("scopeShared")}
+              value={itemScope}
+              onChange={(e) => setItemScope(e.target.value)}
+            >
+              <option value="shared">{t("scopeShared")}</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>{t("scopeBranch")}: {l.name}</option>
+              ))}
+            </AppSelect>
+          )}
         </div>
-      )}
+      </SlideInPanel>
     </div>
   );
 }

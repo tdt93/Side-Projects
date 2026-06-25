@@ -193,9 +193,9 @@ function DetailPanel({
 }) {
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]" onClick={onClose} aria-hidden />
       <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-border bg-card shadow-2xl transition-transform duration-300 ease-out lg:static lg:z-auto lg:max-w-none lg:shadow-none"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md animate-slide-in-right flex-col border-l border-border bg-card shadow-2xl sm:max-w-lg"
         role="dialog"
         aria-label={title}
       >
@@ -333,7 +333,7 @@ export function OwnerOverviewSection({ currency, tenantName, viewAllLocations, b
         </p>
       </div>
 
-      <div className={`relative ${expanded ? "lg:grid lg:grid-cols-[1fr_360px] lg:gap-4" : ""}`}>
+      <div className="relative">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <ClickableStatCard
             tileId="orders"
@@ -398,11 +398,9 @@ export function OwnerOverviewSection({ currency, tenantName, viewAllLocations, b
         </div>
 
         {expanded && (
-          <div className="mt-4 lg:mt-0">
-            <DetailPanel title={t(TILE_TITLES[expanded])} onClose={() => setExpanded(null)}>
-              {renderPanelContent(expanded)}
-            </DetailPanel>
-          </div>
+          <DetailPanel title={t(TILE_TITLES[expanded])} onClose={() => setExpanded(null)}>
+            {renderPanelContent(expanded)}
+          </DetailPanel>
         )}
       </div>
 

@@ -48,8 +48,8 @@ export function OrderItemsGrouped({
             {categoryLabel(category)}
           </p>
           <div className="space-y-1.5">
-            {catItems.map((item) => (
-              <div key={item.menuItemId} className={`flex items-center justify-between gap-2 text-sm ${rowText}`}>
+            {catItems.map((item, idx) => (
+              <div key={`${item.menuItemId}-${idx}`} className={`flex items-center justify-between gap-2 text-sm ${rowText}`}>
                 <div className="min-w-0 flex-1">
                   <span className="font-medium">{item.name}</span>
                   {showPrices && (

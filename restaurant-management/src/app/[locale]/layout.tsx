@@ -2,9 +2,7 @@ import { Cormorant_Garamond, IBM_Plex_Mono, Source_Sans_3 } from "next/font/goog
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { routing } from "@/i18n/routing";
-import "../globals.css";
 
 const sourceSans = Source_Sans_3({
   subsets: ["latin", "vietnamese", "latin-ext"],
@@ -43,15 +41,11 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale} suppressHydrationWarning className="h-full">
-      <body
-        suppressHydrationWarning
-        className={`${sourceSans.variable} ${cormorant.variable} ${ibmPlexMono.variable} min-h-full antialiased`}
-      >
-        <ThemeProvider>
-          <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
-        </ThemeProvider>
-      </body>
-    </html>
+    <div
+      lang={locale}
+      className={`${sourceSans.variable} ${cormorant.variable} ${ibmPlexMono.variable} min-h-full antialiased`}
+    >
+      <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+    </div>
   );
 }

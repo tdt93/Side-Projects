@@ -17,13 +17,25 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ number: strin
   const tableNumber = parseInt(number, 10);
   const body = await req.json();
 
-  const { locationId } = await resolveLocationScope(session.tenantId, {
+  const explicitLocationId = typeof body.locationId === "string" ? body.locationId : undefined;
+  const { locationId: scopedId } = await resolveLocationScope(session.tenantId, {
     staffRole: session.staffRole,
     activeLocationId: session.activeLocationId,
   });
+  const locationId = explicitLocationId ?? scopedId;
 
   if (!locationId) {
     return NextResponse.json({ error: "Select a location first" }, { status: 400 });
+  }
+
+  if (explicitLocationId) {
+    const loc = await prisma.location.findFirst({
+      where: { id: explicitLocationId, tenantId: session.tenantId, isActive: true },
+      select: { id: true },
+    });
+    if (!loc) {
+      return NextResponse.json({ error: "Invalid location" }, { status: 400 });
+    }
   }
 
   await prisma.table.update({

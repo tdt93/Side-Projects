@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/db";
 import { getRestaurantData } from "@/lib/restaurant-data";
 import { subscribeTenantUpdates } from "@/lib/live-broadcast";
 import { getSession } from "@/lib/session";
@@ -12,11 +13,24 @@ export async function GET(req: Request) {
   }
 
   const tenantId = session.tenantId;
-  const scope = {
-    staffRole: session.staffRole,
-    activeLocationId: session.activeLocationId,
-  };
+  const url = new URL(req.url);
+  const viewAllParam = url.searchParams.get("viewAll") === "1";
+  const locationIdParam = url.searchParams.get("locationId");
   const encoder = new TextEncoder();
+
+  async function resolveStreamScope() {
+    let activeLocationId = session.activeLocationId ?? null;
+    if (viewAllParam && session.staffRole === "OWNER") {
+      activeLocationId = null;
+    } else if (locationIdParam) {
+      const loc = await prisma.location.findFirst({
+        where: { id: locationIdParam, tenantId, isActive: true },
+        select: { id: true },
+      });
+      if (loc) activeLocationId = loc.id;
+    }
+    return { staffRole: session.staffRole, activeLocationId };
+  }
 
   const stream = new ReadableStream({
     start(controller) {
@@ -25,6 +39,7 @@ export async function GET(req: Request) {
       const push = async () => {
         if (closed) return;
         try {
+          const scope = await resolveStreamScope();
           const payload = await getRestaurantData(tenantId, scope);
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "update", payload })}\n\n`),
