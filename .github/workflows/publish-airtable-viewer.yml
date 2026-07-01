@@ -1,0 +1,107 @@
+name: Publish airtable-viewer image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "airtable-viewer/**"
+      - ".github/workflows/publish-airtable-viewer.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/tdt93/airtable-viewer
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build -t airtable-viewer-test airtable-viewer
+
+      - name: Health check
+        run: |
+          cid=$(docker run -d -p 8080:3000 \
+            -e NODE_ENV=production \
+            -e SESSION_SECRET=ci-health-check \
+            airtable-viewer-test)
+          trap 'docker rm -f "$cid"' EXIT
+          ok=0
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sf http://127.0.0.1:8080/health | grep -q ok; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "Health check failed. Container logs:"
+            docker logs "$cid"
+            exit 1
+          fi
+          curl -sf http://127.0.0.1:8080/ | grep -qi html
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        run: |
+          docker tag airtable-viewer-test "${{ env.IMAGE_NAME }}:latest"
+          docker tag airtable-viewer-test "${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          docker push "${{ env.IMAGE_NAME }}:latest"
+          docker push "${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+  update-deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require DEPLOY_REPO_TOKEN
+        env:
+          TOKEN: ${{ secrets.DEPLOY_REPO_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Missing repository secret DEPLOY_REPO_TOKEN."
+            echo "Create a fine-grained PAT with Contents: Read and write on tdt93/Docker-deployment,"
+            echo "then add it in Side-Projects → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Checkout deploy repo
+        uses: actions/checkout@v5
+        with:
+          repository: tdt93/Docker-deployment
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          path: deploy-repo
+
+      - name: Pin image in deploy stub
+        working-directory: deploy-repo
+        run: |
+          mkdir -p airtable-viewer
+          cat > airtable-viewer/Dockerfile << EOF
+          # Deploy stub for Coolify. Image built by tdt93/Side-Projects CI.
+          FROM ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          EOF
+
+      - name: Push deploy repo
+        working-directory: deploy-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add airtable-viewer/Dockerfile
+          if git diff --staged --quiet; then
+            echo "Deploy stub already at this SHA."
+            exit 0
+          fi
+          git commit -m "deploy(airtable-viewer): pin image ${{ github.sha }}"
+          git push
